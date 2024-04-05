@@ -16,7 +16,6 @@ respect the style that I have chosen:
 
 - Allman style braces.
 - Single space inside parentheses for function definition and calls.
-- Block indents use two spaces.
 - When breaking long lines at a binary operator, the operator goes on
   the start of the second line.
 - Align parts of similar statements vertically.
