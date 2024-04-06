@@ -1,11 +1,19 @@
 // zig fmt: off
 // DO NOT REMOVE ABOVE LINE -- I strongly dislike the way Zig formats code.
 
+//! PiGPIO-Zig is a module that communicates with the Raspberry Pi's pigpiod
+//! GPIO daemon.
+//!
+//! PiGPIO-Zig provides most of the capabilities of C based pigpiod_if2
+//! interface, but is written entirely in zig.  The missing capabilities are
+//! functions that pigpiod implements directly on the client, and that Zig
+//! provides native function for.
+
 const std = @import( "std" );
 
 const PiGPIO = @This();
 
-const log = std.log.scoped( .pigpiod );
+const log = std.log.scoped( .PiGPIO );
 
 // =============================================================================
 //  Our Fields
@@ -19,11 +27,19 @@ notify_handle : u32    = 0,
 //  Structure Definitions
 // =============================================================================
 
-const CBFunction = fn (x: i32) void;
+const CBFunc  = fn  ( in_pin   : u32,
+                      in_level : bool,
+                      in_tick  : u32 ) void;
+
+const CBFuncEx = fn ( in_pin   : u32,
+                      in_level : bool,
+                      in_tick  : u32,
+                      in_usr   : *anyopaque ) void;
 
 // -----------------------------------------------------------------------------
 //  Zig Errors
 
+/// Zig Errors for various status messages returned from the pigpiod daemon.
 pub const PiGPIOError = error
 {
     init_failed,       // gpioInitialise failed
@@ -210,6 +226,7 @@ pub const SPIError   =    Error
 //  Constant Definitions
 // =============================================================================
 
+/// Commands supported by pigpiod daemon.
 const Command = enum(u8)
 {
     MODES   = 0,
@@ -354,13 +371,25 @@ const Command = enum(u8)
     WVCAP  = 118,
 };
 
+// =============================================================================
+//  Privat Struct
+// =============================================================================
+
+/// Communincations header for exchanges with pigpiod.
 const Header = struct
 {
+    /// Command to perform
     cmd : u32,
+    /// First parameter
     p1  : u32,
+    /// Second parameter
     p2  : u32,
+    /// On send: length of additional data.  On receive: status or length
+    /// of additional data.
     p3  : u32,
 };
+
+const Extent = [] const u8;
 
 // =============================================================================
 //  Public Functions
@@ -371,6 +400,11 @@ const Header = struct
 // -----------------------------------------------------------------------------
 /// Initialize a PiGPIO structure.
 ///
+/// Parameter:
+///   - in_alloc - an allocator to use as needed.
+///   - in_addr  - the domain name, or ip address (as text) of the machine
+///                where the pigpiod daemon is running. null = localhost
+///   - in_port  - the port on which the pigpiod is listening. null = 8888
 
 pub fn connect( self     : *PiGPIO,
                 in_alloc : std.mem.Allocator,
@@ -396,7 +430,7 @@ pub fn connect( self     : *PiGPIO,
 //  Public function: disconnect
 // -----------------------------------------------------------------------------
 /// Deinitialize a PiGPIO structure
-///
+
 pub fn disconnect( self : *PiGPIO ) void
 {
     self.cmd_stream.close();
@@ -408,130 +442,271 @@ pub fn disconnect( self : *PiGPIO ) void
 // -----------------------------------------------------------------------------
 //  Public function: pin
 // -----------------------------------------------------------------------------
-//  Return an initialized Pin
+/// Return an initialized Pin structure.
+///
+/// Paramter:
+/// - pin - the Broadcom pin number.
 
 pub fn pin( self : *PiGPIO, in_pin : u32 ) Pin
 {
     return .{ .gpio = self, .pin = in_pin };
 }
 
-// // --------------------------------------------------------------------------
-// //  Public function: spi
-// // --------------------------------------------------------------------------
-// ///  Allocate and return an unitialized SPI instance
-// ///
-// ///  Usage:
-// ///     var spi = gpio.spi( alloc, chan, rate, flags );
-
-// pub fn spi( self         : *PiGPIO,
-//             in_allocator : std.mem.Allocator,
-//             in_channel   : u32,
-//             in_bit_rate  : u32,
-//             in_flags     : u32 ) (Error||error{OutOfMemory})!*SPI
-// {
-//   return try PiGPIO.SPI.init( in_allocator,
-//                                self,
-//                                in_channel,
-//                                in_bit_rate,
-//                                in_flags );
-// }
-
 // -----------------------------------------------------------------------------
-//  Public function: Pin.readBank1
+//  Public function: readBank1
 // -----------------------------------------------------------------------------
+/// Read all bank 1 GPIO simultaniouslly.
+///
+/// The result is a u32 with the state of all GPIO pins.  The low order bit
+/// is pin 1.
 
 pub fn readBank1( self : PiGPIO ) ComError!u32
 {
-    return try self.cmd_stream.doCmdBasic( .BR1, 0, 0, 0, null );
+    return try self.cmd_stream.doCmdBasic( .BR1, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
-//  Public function: Pin.readBank2
+//  Public function: readBank2
 // -----------------------------------------------------------------------------
+/// Read all bank 2 GPIO simultaniouslly.
+///
+/// The result is a u32 with the state of all GPIO pins.  The low order bit
+/// is pin 1.
 
 pub fn readBank2( self : PiGPIO )  ComError!u32
 {
-    return try self.cmd_stream.doCmdBasic( .BR2, 0, 0, 0, null );
+    return try self.cmd_stream.doCmdBasic( .BR2, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
-//  Public function: Pin.clearBank1
+//  Public function: clearBank1
 // -----------------------------------------------------------------------------
+/// Clear multiple bank 1 GPIO pins simultaniouslly.
+///
+/// Parameter:
+/// - in_mask - I mask indicating the pins to clear. The low order bit is pin 1.
 
 pub fn clearBank1(  self : PiGPIO, in_mask : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BC1, in_mask, 0, 0, null );
+    _ = try self.cmd_stream.doCmd( .BC1, true, in_mask, 0, null );
 }
 
 // -----------------------------------------------------------------------------
-//  Public function: Pin.clearBank2
+//  Public function: clearBank2
 // -----------------------------------------------------------------------------
+/// Clear multiple bank 2 GPIO pins simultaniouslly.
+///
+/// Parameter:
+/// - in_mask - I mask indicating the pins to clear. The low order bit is pin 1.
 
 pub fn clearBank2(  self : PiGPIO, in_mask : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BC2, in_mask, 0, 0, null );
+    _ = try self.cmd_stream.doCmd( .BC2, true, in_mask, 0, null );
 }
 
 // -----------------------------------------------------------------------------
-//  Public function: Pin.setBank1
+//  Public function: setBank1
 // -----------------------------------------------------------------------------
+/// Set multiple bank 1 GPIO pins simultaniouslly.
+///
+/// Parameter:
+/// - in_mask - I mask indicating the pins to set. The low order bit is pin 1.
 
 pub fn setBank1(  self : PiGPIO, in_mask : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BS1, in_mask, 0, 0, null );
+    _ = try self.cmd_stream.doCmd( .BS1, true, in_mask, 0, null );
 }
 
 // -----------------------------------------------------------------------------
-//  Public function: Pin.setBank2
+//  Public function: setBank2
 // -----------------------------------------------------------------------------
+/// Set multiple bank 2 GPIO pins simultaniouslly.
+///
+/// Parameter:
+/// - in_mask - I mask indicating the pins to set. The low order bit is pin 1.
 
 pub fn setBank2( self : PiGPIO, in_mask : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BS2, in_mask, 0, 0, null );
+    _ = try self.cmd_stream.doCmd( .BS2, true, in_mask, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: getCurrentTick
+// -----------------------------------------------------------------------------
+/// Get the current tick (microseconds) from the pgpiod daemon.
+
+pub fn getCurrentTick( self : PiGPIO ) Error!void
+{
+    return try self.cmd_stream.doCmdBasic( .TICK, true, 0, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: getHardwareVersion
+// -----------------------------------------------------------------------------
+/// Get the hardware version from the pgpiod daemon.
+
+pub fn getHardwareVersion( self : PiGPIO ) Error!void
+{
+    return try self.cmd_stream.doCmd( .HWVER, true, 0, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: getPiGPIOVersion
+// -----------------------------------------------------------------------------
+/// Get the version number from the pigpiod daemon.
+
+pub fn getPiGPIOVersion( self : PiGPIO ) Error!void
+{
+    return try self.cmd_stream.doCmd( .PIGPV, true, 0, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: shell
+// -----------------------------------------------------------------------------
+/// Run a shell script on the system where the pigpiod daemon is running.
+/// The named scrip must exist in /opt/pigpio/cgi on the target system
+/// and must be executable.
+/// The returned exit status is normally 256 times that set by the shell
+/// script's exit function. If the script can't be found 32512 will be returned.
+
+pub fn shell( self     : PiGPIO,
+              in_name  : [] const u8,
+              in_param : [] const u8 ) Error!u32
+{
+    const sep = [1]u8{ 0 };
+    const ext = [3]Extent{ in_name, &sep, in_param };
+
+    return try self.cmd_stream.doCmd( .SHELL, true, 0, 0, &ext );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: custom1
+// -----------------------------------------------------------------------------
+/// Run a custom function on the pigpiod dameon.
+/// The daemon needs to be re-built to add the custom function.
+///
+/// The meaning of the three arguments depend on custom function itself.
+///
+/// The custom function returns an unsigned value.
+
+pub fn custom1( self    : PiGPIO,
+                in_arg1 : u32,
+                in_arg2 : u32,
+                in_arg3 : [] const u8 ) Error!i32
+{
+    const ext = [1]Extent{ in_arg3 };
+
+    const result = try self.cmd_stream.doCmdBasic( .CF1,
+                                                   true,
+                                                   in_arg1,
+                                                   in_arg2,
+                                                   &ext );
+
+    return @bitCast( result );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: custom2
+// -----------------------------------------------------------------------------
+/// Run a custom function on the pigpiod dameon.
+/// The daemon needs to be re-built to add the custom function.
+///
+/// The meaning of the two arguments depend on custom function itself.
+/// The in_reply parameter points to a slice that is filled in by the
+/// custom function.
+
+pub fn custom2( self    : PiGPIO,
+                in_arg1 : u32,
+                in_arg2 : [] const u8,
+                in_reply : []u8 ) Error!i32
+{
+    const ext = [1]Extent{ in_arg2 };
+
+    const result = try self.cmd_stream.doCmdBasic( .CF2,
+                                                   false,
+                                                   in_arg1,
+                                                   0,
+                                                   &ext );
+    defer self.gpio.unlockCmdMutex();
+
+    _ = try self.cmd_stream.read( in_reply );
+
+    return @bitCast( result );
 }
 
 // =============================================================================
 //  Private Functions
 // =============================================================================
 
-    // -------------------------------------------------------------------------
-    //  Function: Stream.doCmd
-    // -------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+//  Function: extentFrom
+// -----------------------------------------------------------------------------
 
-    fn doCmd( self         : *PiGPIO,
-              in_cmd       : Command,
-              in_p1        : u32,
-              in_p2        : u32,
-              in_ext_len   : u32,
-              in_extension : ?* const anyopaque ) Error!u32
-    {
-        return self.cmd_stream.doCmd( in_cmd,
-                                      in_p1,
-                                      in_p2,
-                                      in_ext_len,
-                                      in_extension );
-    }
+fn extentFrom( T : type, in_val : * const T ) Extent
+{
+    const p : [*] const u8 = @ptrCast( in_val );
 
-    // -------------------------------------------------------------------------
-    //  Function: Stream.doCmdBasic
-    // -------------------------------------------------------------------------
+    const result : Extent = p[0..@sizeOf( T )];
 
-    fn doCmdBasic( self         : *PiGPIO,
-                   in_cmd       : Command,
-                   in_p1        : u32,
-                   in_p2        : u32,
-                   in_ext_len   : u32,
-                   in_extension : ?* const anyopaque ) Error!u32
-    {
-        return self.cmd_stream.doCmdBasic( in_cmd,
-                                           in_p1,
-                                           in_p2,
-                                           in_ext_len,
-                                           in_extension );
-    }
+    // log.debug( "{any} >> {*} >> {*} >> {any}",
+    //            .{ in_val.*, in_val, p, result } );
+
+    return result;
+}
+
+// -----------------------------------------------------------------------------
+//  Function: doCmd
+// -----------------------------------------------------------------------------
+/// Convieniance function which maps to the command stream's doCmd function.
+
+inline fn doCmd( self       : *PiGPIO,
+                 in_cmd     : Command,
+                 in_unlock  : bool,
+                 in_p1      : u32,
+                 in_p2      : u32,
+                 in_extents : ?[] const Extent ) Error!u32
+{
+    return self.cmd_stream.doCmd( in_cmd,
+                                  in_unlock,
+                                  in_p1,
+                                  in_p2,
+                                  in_extents );
+}
+
+// -----------------------------------------------------------------------------
+//  Function: doCmdBasic
+// -----------------------------------------------------------------------------
+/// Convieniance function which maps to the command stream's doCmdBasic function.
+
+inline fn doCmdBasic( self       : *PiGPIO,
+                      in_cmd     : Command,
+                      in_unlock  : bool,
+                      in_p1      : u32,
+                      in_p2      : u32,
+                      in_extents : ?[] const Extent ) Error!u32
+{
+    return self.cmd_stream.doCmdBasic( in_cmd,
+                                       in_unlock,
+                                       in_p1,
+                                       in_p2,
+                                       in_extents );
+}
+
 // -----------------------------------------------------------------------------
 //  Function: convertError
 // -----------------------------------------------------------------------------
+/// Convieniance function which unlocks the command stream's mutex.
+
+inline fn unlockCmdMutex( self : *PiGPIO, ) void
+{
+    self.cmd_stream.mutex.unlock();
+}
+
+// -----------------------------------------------------------------------------
+//  Function: convertError
+// -----------------------------------------------------------------------------
+/// Convert an error status returnd from the pidpiod daemon into its
+/// coresponding Zig error.
 
 fn convertError( in_err : i32 ) PiGPIOError
 {
@@ -703,12 +878,161 @@ fn convertError( in_err : i32 ) PiGPIOError
 }
 
 // =============================================================================
+//  Structure Stream
+// =============================================================================
+
+/// This structure manages a communications stream with the pigpiod daemon.
+
+const Stream = struct
+{
+    stream    : std.net.Stream   = undefined,
+    mutex     : std.Thread.Mutex = .{},
+
+    // -------------------------------------------------------------------------
+    //  Function: Stream.open
+    // -------------------------------------------------------------------------
+
+    fn open( self     : *Stream,
+             in_alloc : std.mem.Allocator,
+             in_addr  : []const u8,
+             in_port  : u16 ) InitError!void
+    {
+        self.stream   = try std.net.tcpConnectToHost( in_alloc,
+                                                      in_addr,
+                                                      in_port );
+
+
+        // ### TODO ### Zig Workaround ## Zig needs better way to set NODELAY.
+
+        const opt : u32          = 1;
+        const op  : [*] const u8 = @ptrCast( &opt );
+
+        try std.posix.setsockopt( self.stream.handle,
+                                  std.os.linux.IPPROTO.TCP,
+                                  std.os.linux.TCP.NODELAY,
+                                  op[0..4] );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Stream.close
+    // -------------------------------------------------------------------------
+
+    fn close( self : *Stream ) void
+    {
+        self.stream.close();
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Stream.doCmd
+    // -------------------------------------------------------------------------
+    /// Run a transaction with a pigpiod daemon.  If the result value returned
+    /// by the daemon is negative, an appropriate error code is returned.
+    /// Otherwise the positive result is returned.
+
+    fn doCmd( self       : *Stream,
+              in_cmd     : Command,
+              in_unlock  : bool,
+              in_p1      : u32,
+              in_p2      : u32,
+              in_extents : ?[] const Extent ) Error!u32
+    {
+        const result = try self.doCmdBasic( in_cmd,
+                                            in_unlock,
+                                            in_p1,
+                                            in_p2,
+                                            in_extents );
+
+        const status : i32 = @bitCast( result );
+
+        if (status < 0) return convertError( status );
+
+        return result;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Stream.doCmdBasic
+    // -------------------------------------------------------------------------
+    /// Run a transaction with a pigpiod daemon.  Returns the
+    /// result value without checking for error codes.
+
+    fn doCmdBasic( self       : *Stream,
+                   in_cmd     : Command,
+                   in_unlock  : bool,
+                   in_p1      : u32,
+                   in_p2      : u32,
+                   in_extents : ?[] const Extent ) Error!u32
+    {
+        var   hdr : Header = .{ .cmd = @intFromEnum( in_cmd ),
+                                .p1  = in_p1,
+                                .p2  = in_p2,
+                                .p3  = 0 };
+
+        if (in_extents) |e|
+        {
+            for (e) |an_extent|
+            {
+                std.debug.assert( hdr.p3 + an_extent.len < 0xFFFF_FFFF );
+
+                hdr.p3 += @intCast( an_extent.len );
+            }
+
+            // log.debug( "send hdr.p3 = {}", .{ hdr.p3 } );
+        }
+
+        self.mutex.lock();
+        errdefer self.mutex.unlock();
+
+        _ = try self.stream.write( std.mem.asBytes( &hdr ) );
+
+        if (in_extents) |e|
+        {
+            for (e) |an_extent|
+            {
+                // log.debug( "send extent len: {} - {any} ", .{ an_extent.len, an_extent } );
+
+                _ = try self.stream.write( an_extent );
+            }
+        }
+
+        _ = try self.stream.read( std.mem.asBytes( &hdr ) );
+
+        if (hdr.cmd != @intFromEnum( in_cmd )) return error.bad_recv;
+
+        if (in_unlock) self.mutex.unlock();
+
+        return hdr.p3;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Stream.write
+    // -------------------------------------------------------------------------
+
+    fn write( self: Stream, buffer: [] const u8 ) WriteError!usize
+    {
+        self.stream.write( buffer );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Stream.read
+    // -------------------------------------------------------------------------
+
+    fn read( self: Stream, buffer: []u8 ) ReadError!usize
+    {
+        self.stream.read( buffer );
+    }
+
+};
+
+// =============================================================================
 //  Structure Pin
 // =============================================================================
+
+/// This structure manages a GPIO pin.
 
 pub const Pin = struct
 {
     gpio  : *PiGPIO,
+    /// Broadcom pin number
     pin   : u32,
 
     // -------------------------------------------------------------------------
@@ -750,7 +1074,7 @@ pub const Pin = struct
 
     pub fn setHigh( self : Pin ) Error!void
     {
-        _ = try self.gpio.doCmd( .WRITE, self.pin, 1, 0, null );
+        _ = try self.gpio.doCmd( .WRITE, true, self.pin, 1, null );
     }
 
     // -------------------------------------------------------------------------
@@ -762,7 +1086,7 @@ pub const Pin = struct
 
     pub fn setLow( self : Pin ) Error!void
     {
-        _ = try self.gpio.doCmd( .WRITE, self.pin, 0, 0, null );
+        _ = try self.gpio.doCmd( .WRITE, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -775,9 +1099,9 @@ pub const Pin = struct
     pub fn set( self : Pin, in_value : bool ) Error!void
     {
         _ = try self.gpio.doCmd( .WRITE,
+                                 true,
                                  self.pin,
                                  @intFromBool( in_value ),
-                                 0,
                                  null );
     }
 
@@ -788,7 +1112,7 @@ pub const Pin = struct
 
     pub fn get( self : Pin ) Error!bool
     {
-        return try self.gpio.doCmd( .READ, self.pin, 0, 0, null ) != 0;
+        return try self.gpio.doCmd( .READ, true, self.pin, 0, null ) != 0;
     }
 
     // -------------------------------------------------------------------------
@@ -799,9 +1123,9 @@ pub const Pin = struct
     pub fn setMode(  self : Pin, in_mode : Mode ) Error!void
     {
         _ = try self.gpio.doCmd( .MODES,
+                                 true,
                                  self.pin,
                                  @intFromEnum( in_mode ),
-                                 0,
                                  null );
     }
 
@@ -812,7 +1136,7 @@ pub const Pin = struct
 
     pub fn getMode( self : Pin ) Error!Mode
     {
-        const result = try self.gpio.doCmd( .MODEG, self.pin, 0, 0, null );
+        const result = try self.gpio.doCmd( .MODEG, true, self.pin, 0, null );
 
         return @enumFromInt( result );
     }
@@ -822,13 +1146,73 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     // Set the pin pull resistor state.
 
-    pub fn setPull(  self : Pin, inPull : Pull ) Error!void
+    pub fn setPull(  self : Pin, in_pull : Pull ) Error!void
     {
         _ = try self.gpio.doCmd( .PUD,
+                                 true,
                                  self.pin,
-                                 @intFromEnum( inPull ),
-                                 0,
+                                 @intFromEnum( in_pull ),
                                  null );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Pin.setPadStrength
+    // -------------------------------------------------------------------------
+    // Set the pin's drive strength.
+
+    pub fn setPadStrength(  self : Pin, in_strength : u32 ) Error!void
+    {
+        _ = try self.gpio.doCmd( .PADS, true, self.pin, in_strength, null );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Pin.getPadStrength
+    // -------------------------------------------------------------------------
+    // Get the pin's drive strength.
+
+    pub fn getPadStrength(  self : Pin ) Error!u32
+    {
+        return try self.gpio.doCmd( .PADG, true, self.pin, 0, null );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Pin.setGlitchFilter
+    // -------------------------------------------------------------------------
+    /// Set the glitch filter value for the pin.
+    ///
+    /// level changes must be stable for the provided duration before being
+    /// reported via callback, callbackEX or waitForEdge.
+    ///
+    /// Parameter:
+    /// - in_steady - the number of microseconds the pin must be stable
+
+    pub fn setGlitchFilter(  self : Pin, in_steady : u32 ) Error!void
+    {
+        _ = try self.gpio.doCmd( .FG, true, self.pin, in_steady, null );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Pin.setNoiseFilter
+    // -------------------------------------------------------------------------
+    /// Set the noise filter value for the pin.
+    ///
+    /// level changes are ignored until a pins state has been stable
+    /// for the supplied "steady" duration.  Thereafter all chages are
+    /// reported to the "active" druation.
+    ///
+    /// Parameters:
+    /// - in_steady - the number of microseconds the pin must be stable
+    /// - in_active - the number of microseconds in the active period.
+
+    pub fn setNoiseFilter(  self      : Pin,
+                            in_steady : u32,
+                            in_active : u32 ) Error!void
+    {
+        const ext = [1]Extent{ extentFrom( u32, &in_active ) };
+
+        _ = try self.gpio.doCmd( .FN, true, self.pin, in_steady,
+                                 in_active,
+                                 &ext );
     }
 
     // ==== PWM Functions ======================================================
@@ -836,59 +1220,68 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setPWMFrequency
     // -------------------------------------------------------------------------
+    /// Set the PWM frequency.
 
     pub fn setPWMFrequency( self : Pin, in_frequency : u32 ) Error!void
     {
         _ = try self.gpio.doCmd( .PFS,
+                                 true,
                                  self.pin,
                                  in_frequency,
-                                 0,
                                  null );
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.getPWMFrequency
     // -------------------------------------------------------------------------
+    /// Get the currently set PWM frequency in Hz.
 
     pub fn getPWMFrequency( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .PFG, self.pin, 0, 0, null );
+        return try self.gpio.doCmd( .PFG, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.setPWMRange
     // -------------------------------------------------------------------------
+    /// Set the PWM range.  The range is the number that indicates a 100%
+    /// duty cycle when pass the the setPWMDutyCycle function.
 
     pub fn setPWMRange( self : Pin, in_range : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .PRS, self.pin, in_range, 0, null );
+        _ = try self.gpio.doCmd( .PRS, true, self.pin, in_range, null );
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.getPWMRange
     // -------------------------------------------------------------------------
+    /// Get the currently set PWM range.
 
     pub fn getPWMRange( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .PRG, self.pin, 0, 0, null );
+        return try self.gpio.doCmd( .PRG, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.setPWMDutyCycle
     // -------------------------------------------------------------------------
+    /// Set the PWM duty cycle.  A value of 0 indicates a 0% duty cycle, and
+    /// a value that matches the currenlty set range (default: 255) indicates
+    /// a 100% duty cycle.
 
     pub fn setPWMDutyCycle( self : Pin, in_duty_cycle: u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .PWM, self.pin, in_duty_cycle, 0, null );
+        _ = try self.gpio.doCmd( .PWM, true, self.pin, in_duty_cycle, null );
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.getPWMDutyCycle
     // -------------------------------------------------------------------------
+    /// Get the currently set PWM duty cycle value.
 
     pub fn getPWMDutyCycle( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .GDC, self.pin, 0, 0, null );
+        return try self.gpio.doCmd( .GDC, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -900,6 +1293,9 @@ pub const Pin = struct
     pub fn setPWMDutyFractiom( self             : Pin,
                                in_duty_fraction : f32 ) Error!void
     {
+        std.debug.assert(     in_duty_fraction >= 0.0
+                          and in_duty_fraction <= 1.0 );
+
         var range : f32 =   @floatFromInt( try self.getPWMRange() );
 
         range *= in_duty_fraction;
@@ -910,7 +1306,7 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.getPWMDutyFractiom
     // -------------------------------------------------------------------------
-    // Gets the duty cycle based on a fraction that must be between 0 and
+    // Gets the duty cycle as a fraction that must be between 0 and
     // 1 (inclusive).
 
     pub fn getPWMDutyFractiom( self : Pin ) Error!f32
@@ -926,19 +1322,28 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setServoPulseWidth
     // -------------------------------------------------------------------------
+    /// Set the servo pulse width.
+    ///
+    /// This function start sending servo control pulses at the rate of 50
+    /// per second.
+    ///
+    /// The width should be between 500 (full anti-clockwise) and 2500 (full
+    /// clockwise) with 1500 being the mid-point.   Set the width to zero to
+    /// turn off pulses.
 
     pub fn setServoPulseWidth( self : Pin, in_width : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .SERVO, self.pin, in_width, 0, null );
+        _ = try self.gpio.doCmd( .SERVO, true, self.pin, in_width, null );
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.getServoPulseWidth
     // -------------------------------------------------------------------------
+    /// Get the current servo pulse width value.
 
     pub fn getServoPulseWidth( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .GPW, self.pin, 0, 0, null );
+        return try self.gpio.doCmd( .GPW, true, self.pin, 0, null );
     }
 
     // ==== Pin Change Callback ================================================
@@ -946,12 +1351,14 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setCallback
     // -------------------------------------------------------------------------
+    // /// Set a callback function that will be called if the pin's state
+    // /// changes.
 
     // pub fn setCallback( self    : Pin,
     //                     in_edge : Edge,
     //                     in_func : CBFunction ) Error!void
     // {
-    //   _ = try self.gpio.doCmd( .XXXX, self.pin, in_edge, in_func, null );
+    //   _ = try self.gpio.doCmd( .XXXX, true, self.pin, in_edge, in_func, null );
     // }
 };
 
@@ -960,9 +1367,11 @@ pub const Pin = struct
 //  Structure SPI
 // =============================================================================
 
+/// This stucture sets up a communication channel with hardware spi pins.
+
 pub const SPI = struct
 {
-    gpio      : ?*PiGPIO             = null,
+    gpio      : ?*PiGPIO           = null,
     spi       : u32                = 0,
     allocator : std.mem.Allocator  = undefined,
 
@@ -970,6 +1379,21 @@ pub const SPI = struct
     // -------------------------------------------------------------------------
     //  Function: SPI.open
     // -------------------------------------------------------------------------
+    /// Configure the selected pin set for SPI master operation.  The functions
+    /// in this struct perform data transfer only.  Setting of any required
+    /// chip select signals must be handled separatly.
+    ///
+    /// Parameters:
+    /// - in_gpio      - the PiGPIO instance to use.
+    /// - in_allocator - an allocator to be use as needed.
+    /// - in_channel   - the SPI channel to configure
+    /// - in_bit_rate  - the bit rate in Hz for the channel
+    /// - in_flags     - flag bits.
+    ///
+    /// Note: it IS safe to call this function for an open SPI channel.  The
+    ///       channel will be reconfigures to the specified settings.
+
+    // ### TODO ### document SPI flag bits.
 
     pub fn open( self         : *SPI,
                  in_gpio      : *PiGPIO,
@@ -983,11 +1407,12 @@ pub const SPI = struct
 
         self.close(); // will do nothing if SPI not already open.
 
-        self.spi  = try in_gpio.doCmd( .SPIO,
+        const ext = [1]Extent{ extentFrom( u32, &in_flags ) };
+
+        self.spi  = try in_gpio.doCmd( .SPIO, true,
                                        in_channel,
                                        in_bit_rate,
-                                       4,
-                                       std.mem.asBytes( &in_flags ) );
+                                       &ext );
         self.allocator = in_allocator;
         self.gpio      = in_gpio;
     }
@@ -995,12 +1420,13 @@ pub const SPI = struct
     // -------------------------------------------------------------------------
     //  Function: SPI.close
     // -------------------------------------------------------------------------
+    /// Close an open SPIO channel.
 
     pub fn close( self : *SPI ) void
     {
         if (self.gpio) |gpio|
         {
-            _ = gpio.doCmd( .SPIC, self.spi, 0, 0, null ) catch |err|
+            _ = gpio.doCmd( .SPIC, true, self.spi, 0, null ) catch |err|
             {
                 log.warn( "SPI Deinit error (ignored): {}", .{ err } );
             };
@@ -1025,12 +1451,14 @@ pub const SPI = struct
         if (self.gpio) |gpio|
         {
             const result = try gpio.doCmd( .SPIR,
+                                           false,
                                            self.spi,
                                            out_rx_slice.len,
-                                           0,
                                            null );
 
-            gpio.cmd_stream.read( out_rx_slice );
+            defer self.gpio.unlockCmdMutex();
+
+            try gpio.cmd_stream.read( out_rx_slice );
 
             return result;
         }
@@ -1051,13 +1479,11 @@ pub const SPI = struct
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
 
+        const ext = [1]Extent{ in_tx_slice };
+
         if (self.gpio) |gpio|
         {
-            _ = try gpio.doCmd( .SPIW,
-                                self.spi,
-                                0,
-                                @intCast( in_tx_slice.len ),
-                                in_tx_slice.ptr );
+            _ = try gpio.doCmd( .SPIW, true, self.spi,  0, &ext );
             return;
         }
 
@@ -1080,143 +1506,16 @@ pub const SPI = struct
     {
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
 
-        _ = try self.gpio.doCmd( .SPIX,
-                                 self.spi,
-                                 0,
-                                 in_tx_slice.len,
-                                 in_tx_slice );
+        const ext = [1]Extent{ in_tx_slice };
+
+        _ = try self.gpio.doCmd( .SPIX, false, self.spi, 0, &ext );
+
+        defer self.gpio.unlockCmdMutex();
 
         try self.gpio.cmd_stream.read( out_rx_slice );
     }
 };
 
-
-// =============================================================================
-//  Structure Stream
-// =============================================================================
-
-const Stream = struct
-{
-    stream    : std.net.Stream   = undefined,
-    mutex     : std.Thread.Mutex = .{},
-
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.open
-    // -------------------------------------------------------------------------
-
-    fn open( self     : *Stream,
-             in_alloc : std.mem.Allocator,
-             in_addr  : []const u8,
-             in_port  : u16 ) InitError!void
-    {
-        self.stream   = try std.net.tcpConnectToHost( in_alloc,
-                                                      in_addr,
-                                                      in_port );
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.close
-    // -------------------------------------------------------------------------
-
-    fn close( self : *Stream ) void
-    {
-        self.stream.close();
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.doCmd
-    // -------------------------------------------------------------------------
-
-    fn doCmd( self         : *Stream,
-              in_cmd       : Command,
-              in_p1        : u32,
-              in_p2        : u32,
-              in_ext_len   : u32,
-              in_extension : ?* const anyopaque ) Error!u32
-    {
-        const result = try self.doCmdBasic( in_cmd,
-                                            in_p1,
-                                            in_p2,
-                                            in_ext_len,
-                                            in_extension );
-
-        const status : i32 = @bitCast( result );
-
-        if (status < 0) return convertError( status );
-
-        return result;
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.doCmdBasic
-    // -------------------------------------------------------------------------
-
-    fn doCmdBasic( self         : *Stream,
-                   in_cmd       : Command,
-                   in_p1        : u32,
-                   in_p2        : u32,
-                   in_ext_len   : u32,
-                   in_extension : ?* const anyopaque ) Error!u32
-    {
-        var   hdr : Header  = undefined;
-        const cmd : u32     = @intFromEnum( in_cmd );
-
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
-        if (in_extension) |ext|
-        {
-            hdr = .{ .cmd = cmd,
-                     .p1  = in_p1,
-                     .p2  = in_p2,
-                     .p3  = in_ext_len };
-
-            _ = try self.stream.write( std.mem.asBytes( &hdr ) );
-
-            if (in_ext_len > 0)
-            {
-                const ep : [*] const u8 = @ptrCast( ext );
-
-                _ = try self.stream.write( ep[0..in_ext_len] );
-            }
-        }
-        else
-        {
-            hdr = .{ .cmd = @intFromEnum( in_cmd ),
-                     .p1  = in_p1,
-                     .p2  = in_p2,
-                     .p3  = 0 };
-
-            _ = try self.stream.write( std.mem.asBytes( &hdr ) );
-        }
-
-        _ = try self.stream.read( std.mem.asBytes( &hdr ) );
-
-        if (hdr.cmd != cmd) return error.bad_recv;
-
-        return hdr.p3;
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.write
-    // -------------------------------------------------------------------------
-
-    fn write( self: Stream, buffer: [] const u8 ) WriteError!usize
-    {
-        self.stream.write( buffer );
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.read
-    // -------------------------------------------------------------------------
-
-    fn read( self: Stream, buffer: []u8 ) ReadError!usize
-    {
-        self.stream.read( buffer );
-    }
-
-};
 
 // =============================================================================
 //  Testing
