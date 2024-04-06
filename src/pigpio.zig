@@ -460,9 +460,9 @@ pub fn pin( self : *PiGPIO, in_pin : u32 ) Pin
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
 
-pub fn readBank1( self : PiGPIO ) ComError!u32
+pub fn readBank1( self : *PiGPIO ) Error!u32
 {
-    return try self.cmd_stream.doCmdBasic( .BR1, 0, 0, null );
+    return try self.cmd_stream.doCmdBasic( .BR1, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -473,7 +473,7 @@ pub fn readBank1( self : PiGPIO ) ComError!u32
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
 
-pub fn readBank2( self : PiGPIO )  ComError!u32
+pub fn readBank2( self : *PiGPIO )  Error!u32
 {
     return try self.cmd_stream.doCmdBasic( .BR2, true, 0, 0, null );
 }
@@ -486,7 +486,7 @@ pub fn readBank2( self : PiGPIO )  ComError!u32
 /// Parameter:
 /// - in_mask - I mask indicating the pins to clear. The low order bit is pin 1.
 
-pub fn clearBank1(  self : PiGPIO, in_mask : u32 ) Error!void
+pub fn clearBank1(  self : *PiGPIO, in_mask : u32 ) Error!void
 {
     _ = try self.cmd_stream.doCmd( .BC1, true, in_mask, 0, null );
 }
@@ -499,7 +499,7 @@ pub fn clearBank1(  self : PiGPIO, in_mask : u32 ) Error!void
 /// Parameter:
 /// - in_mask - I mask indicating the pins to clear. The low order bit is pin 1.
 
-pub fn clearBank2(  self : PiGPIO, in_mask : u32 ) Error!void
+pub fn clearBank2(  self : *PiGPIO, in_mask : u32 ) Error!void
 {
     _ = try self.cmd_stream.doCmd( .BC2, true, in_mask, 0, null );
 }
@@ -512,7 +512,7 @@ pub fn clearBank2(  self : PiGPIO, in_mask : u32 ) Error!void
 /// Parameter:
 /// - in_mask - I mask indicating the pins to set. The low order bit is pin 1.
 
-pub fn setBank1(  self : PiGPIO, in_mask : u32 ) Error!void
+pub fn setBank1(  self : *PiGPIO, in_mask : u32 ) Error!void
 {
     _ = try self.cmd_stream.doCmd( .BS1, true, in_mask, 0, null );
 }
@@ -525,7 +525,7 @@ pub fn setBank1(  self : PiGPIO, in_mask : u32 ) Error!void
 /// Parameter:
 /// - in_mask - I mask indicating the pins to set. The low order bit is pin 1.
 
-pub fn setBank2( self : PiGPIO, in_mask : u32 ) Error!void
+pub fn setBank2( self : *PiGPIO, in_mask : u32 ) Error!void
 {
     _ = try self.cmd_stream.doCmd( .BS2, true, in_mask, 0, null );
 }
@@ -535,7 +535,7 @@ pub fn setBank2( self : PiGPIO, in_mask : u32 ) Error!void
 // -----------------------------------------------------------------------------
 /// Get the current tick (microseconds) from the pgpiod daemon.
 
-pub fn getCurrentTick( self : PiGPIO ) Error!void
+pub fn getCurrentTick( self : *PiGPIO ) Error!void
 {
     return try self.cmd_stream.doCmdBasic( .TICK, true, 0, 0, null );
 }
@@ -545,7 +545,7 @@ pub fn getCurrentTick( self : PiGPIO ) Error!void
 // -----------------------------------------------------------------------------
 /// Get the hardware version from the pgpiod daemon.
 
-pub fn getHardwareVersion( self : PiGPIO ) Error!void
+pub fn getHardwareVersion( self : *PiGPIO ) Error!void
 {
     return try self.cmd_stream.doCmd( .HWVER, true, 0, 0, null );
 }
@@ -555,7 +555,7 @@ pub fn getHardwareVersion( self : PiGPIO ) Error!void
 // -----------------------------------------------------------------------------
 /// Get the version number from the pigpiod daemon.
 
-pub fn getPiGPIOVersion( self : PiGPIO ) Error!void
+pub fn getPiGPIOVersion( self : *PiGPIO ) Error!void
 {
     return try self.cmd_stream.doCmd( .PIGPV, true, 0, 0, null );
 }
@@ -569,7 +569,7 @@ pub fn getPiGPIOVersion( self : PiGPIO ) Error!void
 /// The returned exit status is normally 256 times that set by the shell
 /// script's exit function. If the script can't be found 32512 will be returned.
 
-pub fn shell( self     : PiGPIO,
+pub fn shell( self     : *PiGPIO,
               in_name  : [] const u8,
               in_param : [] const u8 ) Error!u32
 {
@@ -589,7 +589,7 @@ pub fn shell( self     : PiGPIO,
 ///
 /// The custom function returns an unsigned value.
 
-pub fn custom1( self    : PiGPIO,
+pub fn custom1( self    : *PiGPIO,
                 in_arg1 : u32,
                 in_arg2 : u32,
                 in_arg3 : [] const u8 ) Error!i32
@@ -615,7 +615,7 @@ pub fn custom1( self    : PiGPIO,
 /// The in_reply parameter points to a slice that is filled in by the
 /// custom function.
 
-pub fn custom2( self    : PiGPIO,
+pub fn custom2( self    : *PiGPIO,
                 in_arg1 : u32,
                 in_arg2 : [] const u8,
                 in_reply : []u8 ) Error!i32
