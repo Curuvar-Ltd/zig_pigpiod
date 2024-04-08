@@ -549,6 +549,14 @@ pub fn connect( self     : *PiGPIO,
 
     errdefer self.cmd_stream.close();
 
+    const option : u32          = 1;
+    const op     : [*] const u8 = @ptrCast( &option );
+
+    try std.posix.setsockopt( self.cmd_stream.handle,
+                              std.posix.IPPROTO.TCP,
+                              std.posix.TCP.NODELAY,
+                              op[0..4] );
+
     log.debug( "-- PiGPIO Connected --", .{} );
 }
 
