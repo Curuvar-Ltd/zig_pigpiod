@@ -9,7 +9,7 @@ functions that pigpiod implements directly on the client, and that Zig
 provides native function for.~~
 
 The above paragraph represents the goal, not the reality.  For now the Pin
-(except callback) and SPI functions work. I'm adding more as I get time or
+and SPI functions mostly work. I'm adding more as I get time or
 need them for other projects.   If the current version does not support
 something you need, send a message via
 [the Curuvar contact page](https://curuvar.com/contact?to=support).

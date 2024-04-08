@@ -1,6 +1,38 @@
 // zig fmt: off
 // DO NOT REMOVE ABOVE LINE -- I strongly dislike the way Zig formats code.
 
+// -----------------------------------------------------------------------------
+// Copyright © 2024, Curuvar Ltd.
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+//   1. Redistributions of source code must retain the above copyright notice,
+//      this list of conditions and the following disclaimer.
+//
+//   2. Redistributions in binary form must reproduce the above copyright
+//      notice, this list of conditions and the following disclaimer in the
+//      documentation and/or other materials provided with the distribution.
+//
+//   3. Neither the name of the copyright holder nor the names of its
+//      contributors may be used to endorse or promote products derived from
+//      this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+// -----------------------------------------------------------------------------
+
 //! PiGPIO-Zig is a module that communicates with the Raspberry Pi's pigpiod
 //! GPIO daemon.
 //!
@@ -19,25 +51,42 @@ const log = std.log.scoped( .PiGPIO );
 //  Our Fields
 // =============================================================================
 
-cmd_stream    : Stream = undefined,
-notify_stream : Stream = undefined,
-notify_handle : u32    = 0,
+/// The allocator that we will use as needed.
+allocator       : std.mem.Allocator = undefined,
+
+/// The DNS name or IP address of pigpiod daemon.
+address         : [] const u8       = "::",
+
+/// The port the daemon is listening on.
+port            : u16               = 8888,
+
+/// A stream for sending commands to the daemon and receiving responses.
+cmd_stream      : std.net.Stream    = undefined,
+
+/// A mutex to make sending commands thread safe.
+cmd_mutex       : std.Thread.Mutex  = .{},
+
+/// A handle to identify us to the daemon for notification control.
+notify_handle   : u32               = 0,
+
+/// A thread that listens for notification from the server.
+notify_thread   : ?std.Thread       = null,
+
+/// A bitmap of current pins that we want notification for.
+notify_bits    : u32               = 0,
+
+/// A mutex to make callback list manipulation thread safe.
+list_mutex      : std.Thread.Mutex  = .{},
+
+/// Level change notification callbacks.
+level_cb_first  : ?*LevelCallback        = null,
+
+/// Event notification callbacks.
+event_cb_first  : ?*EventCallback        = null,
 
 // =============================================================================
-//  Structure Definitions
+//  Public Constants
 // =============================================================================
-
-const CBFunc  = fn  ( in_pin   : u32,
-                      in_level : bool,
-                      in_tick  : u32 ) void;
-
-const CBFuncEx = fn ( in_pin   : u32,
-                      in_level : bool,
-                      in_tick  : u32,
-                      in_usr   : *anyopaque ) void;
-
-// -----------------------------------------------------------------------------
-//  Zig Errors
 
 /// Zig Errors for various status messages returned from the pigpiod daemon.
 pub const PiGPIOError = error
@@ -142,7 +191,7 @@ pub const PiGPIOError = error
     bad_hclk_freq,     // invalid hardware clock frequency
     bad_hclk_pass,     // need password to use hardware clock 1
     hpwm_illegal,      // illegal, PWM in use for main clock
-    bad_databits,      // serial data bits not 1-32
+    bad_databits,      // serial data bits not 0-31
     bad_stopbits,      // serial (half) stop bits not 2-8
     msg_toobig,        // socket/pipe message too big
     bad_malloc_mode,   // bad memory allocation mode
@@ -222,8 +271,99 @@ pub const Error      =    std.posix.WriteError
 pub const SPIError   =    Error
                        || error{ SPINotOpen };
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//  Public Type Definitions
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// -----------------------------------------------------------------------------
+/// Pin mode.  The definition of the alt modes depends on the specific pin.
+pub const Mode = enum(u8)
+{
+    input  = 0,
+    output = 1,
+    alt0   = 4,
+    alt1   = 5,
+    alt2   = 6,
+    alt3   = 7,
+    alt4   = 3,
+    alt5   = 2,
+};
+
+// -----------------------------------------------------------------------------
+/// Pull resistor configuration
+pub const Pull = enum(u8)
+{
+    none = 0,
+    down = 1,
+    up   = 2,
+};
+
+// -----------------------------------------------------------------------------
+/// Edge for callbacks
+pub const Edge = enum(u8)
+{
+    falling = 0,
+    rising  = 1,
+    either  = 2,
+};
+
+// -----------------------------------------------------------------------------
+///  Callback function prototype.
+
+const LevelCBFunc = * const fn ( in_pin     : Pin,
+                                 in_edge    : Edge,
+                                 in_tick    : u32,
+                                 in_context : ?*anyopaque ) void;
+
+const EventCBFunc = * const fn ( in_gpio    : *PiGPIO,
+                                 in_event   : u32,
+                                 in_tick    : u32,
+                                 in_context : ?*anyopaque ) void;
+
+
 // =============================================================================
-//  Constant Definitions
+//  Private Type Definitions
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+/// Communincations header for exchanges with pigpiod.
+const Header = struct
+{
+    /// Command to perform
+    cmd : u32,
+    /// First parameter
+    p1  : u32,
+    /// Second parameter
+    p2  : u32,
+    /// On send: length of additional data.  On receive: status or length
+    /// of additional data.
+    p3  : u32,
+};
+
+// -----------------------------------------------------------------------------
+/// Items to send with transaction.
+const Extent = [] const u8;
+
+// -----------------------------------------------------------------------------
+const LevelCallback = struct
+{
+    next    : ?*LevelCallback,
+    pin     : u5,      // Callbacks only on pins 0 - 31
+    edge    : Edge,
+    func    : LevelCBFunc,
+    context : ?*anyopaque,
+};
+
+// -----------------------------------------------------------------------------
+const EventCallback = struct
+{
+    next    : ?*EventCallback,
+    event   : u32,
+    func    : EventCBFunc,
+    context : ?*anyopaque,
+};
+// =============================================================================
+//  Private Constants
 // =============================================================================
 
 /// Commands supported by pigpiod daemon.
@@ -371,25 +511,7 @@ const Command = enum(u8)
     WVCAP  = 118,
 };
 
-// =============================================================================
-//  Privat Struct
-// =============================================================================
 
-/// Communincations header for exchanges with pigpiod.
-const Header = struct
-{
-    /// Command to perform
-    cmd : u32,
-    /// First parameter
-    p1  : u32,
-    /// Second parameter
-    p2  : u32,
-    /// On send: length of additional data.  On receive: status or length
-    /// of additional data.
-    p3  : u32,
-};
-
-const Extent = [] const u8;
 
 // =============================================================================
 //  Public Functions
@@ -411,17 +533,17 @@ pub fn connect( self     : *PiGPIO,
                 in_addr  : ?[]const u8,
                 in_port  : ?u16 ) InitError!void
 {
-    const addr = if (in_addr) |addr| addr else "::";
-    const port = if (in_port) |port| port else 8888;
+    self.allocator       = in_alloc;
+    self.level_cb_first  = null;
 
-    try self.cmd_stream.open( in_alloc,addr, port );
+    if (in_addr) |a| self.address = a;
+    if (in_port) |p| self.port    = p;
+
+    self.cmd_stream = try std.net.tcpConnectToHost( self.allocator,
+                                                    self.address,
+                                                    self.port );
+
     errdefer self.cmd_stream.close();
-
-    try self.cmd_stream.open( in_alloc,addr, port );
-    errdefer self.notify_stream.close();
-
-    // const notify_handle = try pigpiod.notify_stream.doCommandBasic( NOIB, 0, 0, null );
-
 
     log.debug( "-- PiGPIO Connected --", .{} );
 }
@@ -433,8 +555,39 @@ pub fn connect( self     : *PiGPIO,
 
 pub fn disconnect( self : *PiGPIO ) void
 {
+    log.debug( "Started disconnect", .{} );
+    defer log.debug( "Finished disconnect", .{} );
+
+    self.list_mutex.lock();
+
+    self.notify_bits = 0;
+
+    var a_lvl_cb = self.level_cb_first;
+    self.level_cb_first = null;
+
+    while (a_lvl_cb) |cb|
+    {
+        a_lvl_cb = cb.next;
+        self.allocator.destroy( cb );
+    }
+
+    var an_evt_cb = self.event_cb_first;
+    self.event_cb_first = null;
+
+    while (an_evt_cb) |cb|
+    {
+        an_evt_cb = cb.next;
+        self.allocator.destroy( cb );
+    }
+
+    self.list_mutex.unlock();
+
+    log.debug( "waiting for thread close", .{} );
+
+    if (self.notify_thread) |t| t.join();
+    self.notify_thread = null;
+
     self.cmd_stream.close();
-    self.notify_stream.close();
 
     log.debug( "-- PiGPIO Disconnected --", .{} );
 }
@@ -447,87 +600,237 @@ pub fn disconnect( self : *PiGPIO ) void
 /// Paramter:
 /// - pin - the Broadcom pin number.
 
-pub fn pin( self : *PiGPIO, in_pin : u32 ) Pin
+pub fn pin( self : *PiGPIO, in_pin : u6 ) Pin
 {
+    std.debug.assert( in_pin <= 53 );
+
     return .{ .gpio = self, .pin = in_pin };
 }
 
 // -----------------------------------------------------------------------------
 //  Public function: readBank1
 // -----------------------------------------------------------------------------
-/// Read all bank 1 GPIO simultaniouslly.
+/// Read all bank 1 GPIO pins (0-31) simultaniouslly.
 ///
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
 
 pub fn readBank1( self : *PiGPIO ) Error!u32
 {
-    return try self.cmd_stream.doCmdBasic( .BR1, true, 0, 0, null );
+    return try self.doCmdBasic( .BR1, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
 //  Public function: readBank2
 // -----------------------------------------------------------------------------
-/// Read all bank 2 GPIO simultaniouslly.
+/// Read all bank 2 GPIO pins (33-53) simultaniouslly.
 ///
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
 
 pub fn readBank2( self : *PiGPIO )  Error!u32
 {
-    return try self.cmd_stream.doCmdBasic( .BR2, true, 0, 0, null );
+    return try self.doCmdBasic( .BR2, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
 //  Public function: clearBank1
 // -----------------------------------------------------------------------------
-/// Clear multiple bank 1 GPIO pins simultaniouslly.
+/// Clear multiple bank 1 GPIO pins (0-31) simultaniouslly.
 ///
 /// Parameter:
-/// - in_mask - I mask indicating the pins to clear. The low order bit is pin 1.
+/// - in_pins - I mask indicating the pins to clear. The low order bit is pin 1.
 
-pub fn clearBank1(  self : *PiGPIO, in_mask : u32 ) Error!void
+pub fn clearBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BC1, true, in_mask, 0, null );
+    _ = try self.doCmd( .BC1, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
 //  Public function: clearBank2
 // -----------------------------------------------------------------------------
-/// Clear multiple bank 2 GPIO pins simultaniouslly.
+/// Clear multiple bank 2 GPIO pins (33-53) simultaniouslly.
 ///
 /// Parameter:
-/// - in_mask - I mask indicating the pins to clear. The low order bit is pin 1.
+/// - in_pins - I mask indicating the pins to clear. The low order bit is pin 33.
 
-pub fn clearBank2(  self : *PiGPIO, in_mask : u32 ) Error!void
+pub fn clearBank2(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BC2, true, in_mask, 0, null );
+    _ = try self.doCmd( .BC2, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
 //  Public function: setBank1
 // -----------------------------------------------------------------------------
-/// Set multiple bank 1 GPIO pins simultaniouslly.
+/// Set multiple bank 1 GPIO pins (0-31) simultaniouslly.
 ///
 /// Parameter:
-/// - in_mask - I mask indicating the pins to set. The low order bit is pin 1.
+/// - in_pins - I mask indicating the pins to set. The low order bit is pin 1.
 
-pub fn setBank1(  self : *PiGPIO, in_mask : u32 ) Error!void
+pub fn setBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BS1, true, in_mask, 0, null );
+    _ = try self.doCmd( .BS1, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
 //  Public function: setBank2
 // -----------------------------------------------------------------------------
-/// Set multiple bank 2 GPIO pins simultaniouslly.
+/// Set multiple bank 2 GPIO pins (33-53) simultaniouslly.
 ///
 /// Parameter:
-/// - in_mask - I mask indicating the pins to set. The low order bit is pin 1.
+/// - in_pins - I mask indicating the pins to set. The low order bit is pin 33.
 
-pub fn setBank2( self : *PiGPIO, in_mask : u32 ) Error!void
+pub fn setBank2( self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.cmd_stream.doCmd( .BS2, true, in_mask, 0, null );
+    _ = try self.doCmd( .BS2, true, in_pins, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: maskedUpdateBank1
+// -----------------------------------------------------------------------------
+/// Update a subset of bank 1 GPIO pins (0-31) simultaniouslly.
+///
+/// Parameter:
+/// - in_values - The value to set the pins to
+/// - in_mask   - I mask indicating which pins to update.
+/// The low order bit is pin 1.
+
+pub fn maskedUpdateBank1( self      : *PiGPIO,
+                          in_values : u32,
+                          in_mask   : u32 ) Error!void
+{
+    var p = in_values & in_mask;
+    if (p != 0) _ = try self.doCmd( .BS1, true, p, 0, null );
+    p = ~p & in_mask;
+    if (p != 0) _ = try self.doCmd( .BC1, true, p, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: maskedUpdateBank2
+// -----------------------------------------------------------------------------
+/// Update a subset of bank 1 GPIO pins (33-53) simultaniouslly.
+///
+/// Parameter:
+/// - in_values - The value to set the pins to
+/// - in_mask   - I mask indicating which pins to update.
+/// The low order bit is pin 33.
+
+pub fn maskedUpdateBank2( self      : *PiGPIO,
+                          in_values : u32,
+                          in_mask   : u32 ) Error!void
+{
+    var p = in_values & in_mask;
+    if (p != 0) _ = try self.doCmd( .BS2, true, p, 0, null );
+    p = ~p & in_mask;
+    if (p != 0) _ = try self.doCmd( .BC2, true, p, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: maskedSetModeBank1
+// -----------------------------------------------------------------------------
+/// Set the mode a subset of bank 1 GPIO pins (0-31) simultaniouslly.
+///
+/// Parameter:
+/// - in_values - The value to set the pins to
+/// - in_mask   - I mask indicating which pins to update.
+/// The low order bit is pin 1.
+
+pub fn maskedSetModeBank1( self    : *PiGPIO,
+                           in_mode : Mode,
+                           in_mask : u32 ) Error!void
+{
+    for (0..32) |p|
+    {
+        if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
+        {
+            _ = try self.doCmd( .MODES,
+                                true,
+                                @intCast( p + 1 ),
+                                @intFromEnum( in_mode ),
+                                null );
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: maskedSetModeBank2
+// -----------------------------------------------------------------------------
+/// Set the mode a subset of bank 1 GPIO pins (33-53) simultaniouslly.
+///
+/// Parameter:
+/// - in_values - The value to set the pins to
+/// - in_mask   - I mask indicating which pins to update.
+/// The low order bit is pin 33.
+
+pub fn maskedSetModeBank2( self    : *PiGPIO,
+                           in_mode : Mode,
+                           in_mask : u32 ) Error!void
+{
+    for (0..32) |p|
+    {
+        if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
+        {
+            _ = try self.doCmd( .MODES,
+                                true,
+                                @intCast( p + 33 ),
+                                @intFromEnum( in_mode ),
+                                null );
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: maskedSetPullBank1
+// -----------------------------------------------------------------------------
+/// Set the mode a subset of bank 1 GPIO pins simultaniouslly.
+///
+/// Parameter:
+/// - in_values - The value to set the pins to
+/// - in_mask   - I mask indicating which pins to update.
+/// The low order bit is pin 1.
+
+pub fn maskedSetPullBank1( self    : *PiGPIO,
+                           in_pull : Pull,
+                           in_mask : u32 ) Error!void
+{
+    for (0..32) |p|
+    {
+        if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
+        {
+            _ = try self.doCmd( .PUD,
+                                true,
+                                @intCast( p + 1 ),
+                                @intFromEnum( in_pull ),
+                                null );
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: maskedSetPullBank2
+// -----------------------------------------------------------------------------
+/// Set the mode a subset of bank 1 GPIO pins (33-53) simultaniouslly.
+///
+/// Parameter:
+/// - in_values - The value to set the pins to
+/// - in_mask   - I mask indicating which pins to update.
+/// The low order bit is pin 33.
+
+pub fn maskedSetPullBank2( self    : *PiGPIO,
+                           in_pull : Pull,
+                           in_mask : u32 ) Error!void
+{
+    for (0..32) |p|
+    {
+        if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
+        {
+            _ = try self.doCmd( .PUD,
+                                true,
+                                @intCast( p + 33 ),
+                                @intFromEnum( in_pull ),
+                                null );
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -537,7 +840,7 @@ pub fn setBank2( self : *PiGPIO, in_mask : u32 ) Error!void
 
 pub fn getCurrentTick( self : *PiGPIO ) Error!void
 {
-    return try self.cmd_stream.doCmdBasic( .TICK, true, 0, 0, null );
+    return try self.doCmdBasic( .TICK, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -547,7 +850,7 @@ pub fn getCurrentTick( self : *PiGPIO ) Error!void
 
 pub fn getHardwareVersion( self : *PiGPIO ) Error!void
 {
-    return try self.cmd_stream.doCmd( .HWVER, true, 0, 0, null );
+    return try self.doCmd( .HWVER, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -557,7 +860,7 @@ pub fn getHardwareVersion( self : *PiGPIO ) Error!void
 
 pub fn getPiGPIOVersion( self : *PiGPIO ) Error!void
 {
-    return try self.cmd_stream.doCmd( .PIGPV, true, 0, 0, null );
+    return try self.doCmd( .PIGPV, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -576,7 +879,7 @@ pub fn shell( self     : *PiGPIO,
     const sep = [1]u8{ 0 };
     const ext = [3]Extent{ in_name, &sep, in_param };
 
-    return try self.cmd_stream.doCmd( .SHELL, true, 0, 0, &ext );
+    return try self.doCmd( .SHELL, true, 0, 0, &ext );
 }
 
 // -----------------------------------------------------------------------------
@@ -596,7 +899,7 @@ pub fn custom1( self    : *PiGPIO,
 {
     const ext = [1]Extent{ in_arg3 };
 
-    const result = try self.cmd_stream.doCmdBasic( .CF1,
+    const result = try self.doCmdBasic( .CF1,
                                                    true,
                                                    in_arg1,
                                                    in_arg2,
@@ -622,7 +925,7 @@ pub fn custom2( self    : *PiGPIO,
 {
     const ext = [1]Extent{ in_arg2 };
 
-    const result = try self.cmd_stream.doCmdBasic( .CF2,
+    const result = try self.doCmdBasic( .CF2,
                                                    false,
                                                    in_arg1,
                                                    0,
@@ -632,6 +935,86 @@ pub fn custom2( self    : *PiGPIO,
     _ = try self.cmd_stream.read( in_reply );
 
     return @bitCast( result );
+}
+
+// -----------------------------------------------------------------------------
+// Function: addEventCallback
+// -----------------------------------------------------------------------------
+/// Set a callback function that will be called if the pin's state
+/// changes.
+
+fn addEventCallback( self       : *PiGPIO,
+                     in_event   : u32,
+                     in_func    : EventCBFunc,
+                     in_context : ?*anyopaque )!void
+{
+    const cb = try self.allocator.create( EventCallback );
+    errdefer self.allocator.destroy( cb );
+
+    cb.* = .{
+                .next    = self.event_cb_first,
+                .event   = in_event,
+                .func    = in_func,
+                .context = in_context
+            };
+
+    self.list_mutex.lock();
+    defer self.list_mutex.unlock();
+
+    const start_notify =    self.level_cb_first  == null
+                        and self.event_cb_first  == null;
+
+    self.event_cb_first = cb;
+
+    if (start_notify)
+    {
+      self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Function: removeEventCallback
+// -----------------------------------------------------------------------------
+/// Set a callback function that will be called if the pin's state
+/// changes.
+
+fn removeEventCallback( self       : *PiGPIO,
+                        in_event   : u32,
+                        in_func    : EventCBFunc,
+                        in_context : ?*anyopaque )void
+{
+    self.list_mutex.lock();
+    defer self.list_mutex.unlock();
+
+    var a_callback = self.event_cb_first;
+    var prior : ?*EventCallback  = null;
+
+    while (a_callback) |cb|
+    {
+        if (    cb.event   == in_event
+            and cb.func    == in_func
+            and cb.context == in_context)
+        {
+            if (prior) |p|
+            {
+                p.next = cb.next;
+            }
+            else
+            {
+               self.event_cb_first = cb.next;
+            }
+
+            self.allocator.destroy( cb );
+
+            // ### TODO ### Can we turn off the notify stream?
+            //  ### TODO ### self.notify_bits &= ~(1 << in_pin);
+
+            return;
+        }
+
+        prior = cb;
+        a_callback = cb.next;
+    }
 }
 
 // =============================================================================
@@ -655,51 +1038,351 @@ fn extentFrom( T : type, in_val : * const T ) Extent
 }
 
 // -----------------------------------------------------------------------------
-//  Function: doCmd
+//  Function: Stream.doCmd
 // -----------------------------------------------------------------------------
-/// Convieniance function which maps to the command stream's doCmd function.
+/// Run a transaction with a pigpiod daemon.  If the result value returned
+/// by the daemon is negative, an appropriate error code is returned.
+/// Otherwise the positive result is returned.
 
-inline fn doCmd( self       : *PiGPIO,
-                 in_cmd     : Command,
-                 in_unlock  : bool,
-                 in_p1      : u32,
-                 in_p2      : u32,
-                 in_extents : ?[] const Extent ) Error!u32
+fn doCmd( self       : *PiGPIO,
+          in_cmd     : Command,
+          in_unlock  : bool,
+          in_p1      : u32,
+          in_p2      : u32,
+          in_extents : ?[] const Extent ) Error!u32
 {
-    return self.cmd_stream.doCmd( in_cmd,
-                                  in_unlock,
-                                  in_p1,
-                                  in_p2,
-                                  in_extents );
+    const result = try self.doCmdBasic( in_cmd,
+                                        in_unlock,
+                                        in_p1,
+                                        in_p2,
+                                        in_extents );
+
+    const status : i32 = @bitCast( result );
+
+    if (status < 0) return convertError( status );
+
+    return result;
 }
 
 // -----------------------------------------------------------------------------
-//  Function: doCmdBasic
+//  Function: Stream.doCmdBasic
 // -----------------------------------------------------------------------------
-/// Convieniance function which maps to the command stream's doCmdBasic function.
+/// Run a transaction with a pigpiod daemon.  Returns the
+/// result value without checking for error codes.
 
-inline fn doCmdBasic( self       : *PiGPIO,
-                      in_cmd     : Command,
-                      in_unlock  : bool,
-                      in_p1      : u32,
-                      in_p2      : u32,
-                      in_extents : ?[] const Extent ) Error!u32
+fn doCmdBasic( self       : *PiGPIO,
+               in_cmd     : Command,
+               in_unlock  : bool,
+               in_p1      : u32,
+               in_p2      : u32,
+               in_extents : ?[] const Extent ) Error!u32
 {
-    return self.cmd_stream.doCmdBasic( in_cmd,
-                                       in_unlock,
-                                       in_p1,
-                                       in_p2,
-                                       in_extents );
+    var   hdr : Header = .{ .cmd = @intFromEnum( in_cmd ),
+                            .p1  = in_p1,
+                            .p2  = in_p2,
+                            .p3  = 0 };
+
+    if (in_extents) |e|
+    {
+        for (e) |an_extent|
+        {
+            std.debug.assert( hdr.p3 + an_extent.len < 0xFFFF_FFFF );
+
+            hdr.p3 += @intCast( an_extent.len );
+        }
+
+        // log.debug( "send hdr.p3 = {}", .{ hdr.p3 } );
+    }
+
+    self.cmd_mutex.lock();
+    errdefer self.cmd_mutex.unlock();
+
+    _ = try self.cmd_stream.write( std.mem.asBytes( &hdr ) );
+
+    if (in_extents) |e|
+    {
+        for (e) |an_extent|
+        {
+            // log.debug( "send extent len: {} - {any} ", .{ an_extent.len, an_extent } );
+
+            _ = try self.cmd_stream.write( an_extent );
+        }
+    }
+
+    _ = try self.cmd_stream.read( std.mem.asBytes( &hdr ) );
+
+    if (hdr.cmd != @intFromEnum( in_cmd )) return error.bad_recv;
+
+    if (in_unlock) self.cmd_mutex.unlock();
+
+    return hdr.p3;
 }
 
 // -----------------------------------------------------------------------------
-//  Function: convertError
+// Function: addLevelCallback
 // -----------------------------------------------------------------------------
-/// Convieniance function which unlocks the command stream's mutex.
+/// Set a callback function that will be called if the pin's state
+/// changes.
 
-inline fn unlockCmdMutex( self : *PiGPIO, ) void
+fn addLevelCallback( self       : *PiGPIO,
+                     in_pin     : u5,
+                     in_edge    : Edge,
+                     in_func    : LevelCBFunc,
+                     in_context : ?*anyopaque ) !void
 {
-    self.cmd_stream.mutex.unlock();
+    const cb = try self.allocator.create( LevelCallback );
+    errdefer self.allocator.destroy( cb );
+
+    cb.* = .{
+                .next    = self.level_cb_first,
+                .pin     = in_pin,
+                .edge    = in_edge,
+                .func    = in_func,
+                .context = in_context
+            };
+
+    self.list_mutex.lock();
+    defer self.list_mutex.unlock();
+
+    const start_notify =    self.level_cb_first  == null
+                        and self.event_cb_first  == null;
+
+    self.level_cb_first = cb;
+
+    if (start_notify)
+    {
+      self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+    }
+    else
+    {
+        try self.updateNotifyBits();
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Function: removeLevelCallback
+// -----------------------------------------------------------------------------
+/// Set a callback function that will be called if the pin's state
+/// changes.
+
+fn removeLevelCallback( self       : *PiGPIO,
+                        in_pin     : u5,
+                        in_edge    : Edge,
+                        in_func    : LevelCBFunc,
+                        in_context : ?*anyopaque )void
+{
+    log.debug( "Started removeLevelCallback", .{} );
+    defer log.debug( "Finished removeLevelCallback", .{} );
+
+    self.list_mutex.lock();
+    defer self.list_mutex.unlock();
+
+    var a_callback = self.level_cb_first;
+    var prior : ?*LevelCallback  = null;
+
+    while (a_callback) |cb|
+    {
+        if (    cb.pin     == in_pin
+            and cb.func    == in_func
+            and cb.context == in_context
+            and cb.edge    == in_edge)
+        {
+            if (prior) |p|
+            {
+                p.next = cb.next;
+            }
+            else
+            {
+               self.level_cb_first = cb.next;
+            }
+
+            self.allocator.destroy( cb );
+
+            self.updateNotifyBits() catch {};
+
+            // ### TODO ### Can we turn off the notify stream?
+            //  ### TODO ### self.notify_bits &= ~(1 << in_pin);
+
+
+            return;
+        }
+
+        prior = cb;
+        a_callback = cb.next;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Function: updateNotifyBits
+// -----------------------------------------------------------------------------
+
+fn updateNotifyBits( self : *PiGPIO ) !void
+{
+    // Note to self: don't lock the mutex, we should be
+    // running under one already.
+
+    var a_callback = self.level_cb_first;
+
+    var bits : u32 = 0;
+
+    while (a_callback) |cb|
+    {
+        bits |= @as( u32, 1 ) << cb.pin;
+
+        a_callback = cb.next;
+    }
+
+    if (bits != self.notify_bits)
+    {
+        self.notify_bits = bits;
+
+        log.debug( "NB {X} {X}", .{ self.notify_handle, bits } );
+
+        _ = try self.doCmd( .NB, true, self.notify_handle, bits, null );
+    }
+}
+
+// -----------------------------------------------------------------------------
+//  Function: notifyThread
+// -----------------------------------------------------------------------------
+
+fn notifyThread( self : *PiGPIO ) void
+{
+    const Report  = extern struct
+    {
+        seqno : u16 = 0,
+        flags : u16 = 0,
+        tick  : u32 = 0,
+        level : u32 = 0,
+    };
+
+    var report     : Report = .{};
+    var last_level : u32    = 0;
+
+    const buf : [*]u8 = @ptrCast( &report );
+
+    var notify_stream = std.net.tcpConnectToHost( self.allocator,
+                                                  self.address,
+                                                  self.port ) catch |err|
+    {
+        log.err( "Failed to open notify stream: {}", .{ err } );
+        return;
+    };
+
+    defer notify_stream.close();
+
+    var   hdr : Header = .{ .cmd = @intFromEnum( Command.NOIB ),
+                            .p1  = 0,
+                            .p2  = 0,
+                            .p3  = 0 };
+
+    self.cmd_mutex.lock();
+
+    _ = notify_stream.write( std.mem.asBytes( &hdr ) ) catch |err|
+    {
+        log.err( "Failed initial write to notify stream: {}", .{ err } );
+
+        self.cmd_mutex.unlock();
+
+        return;
+    };
+
+    _ = notify_stream.read(  std.mem.asBytes( &hdr ) ) catch |err|
+    {
+        log.err( "Failed initial read from notify stream: {}", .{ err } );
+
+        self.cmd_mutex.unlock();
+
+        return;
+    };
+
+    self.cmd_mutex.unlock();
+
+    self.notify_handle = hdr.p3;
+
+    self.updateNotifyBits() catch |err|
+    {
+        log.err( "updateNotifyBits error {}", .{ err } );
+    };
+
+    runloop: while(   self.level_cb_first != null
+                  or self.event_cb_first != null)
+
+    {
+        var pollfd = [_]std.posix.pollfd{ .{ .fd     = notify_stream.handle,
+                                            .events  = std.posix.POLL.IN,
+                                            .revents = 0 } };
+
+        const poll_result = std.posix.poll( &pollfd, 1000 ) catch |err|
+        {
+            log.err( "poll error {}", .{ err } );
+
+            break :runloop;
+        };
+
+        if (poll_result <= 0) continue :runloop;
+
+
+        const status = notify_stream.read( buf[0..12] ) catch |err|
+        {
+            log.err( "Failed reading notify stream: {}", .{ err } );
+            break;
+        };
+
+        if  (status == 0) break;
+
+        if (report.flags == 0)
+        {
+            const changed = (report.level ^ last_level) & self.notify_bits;
+
+            last_level = report.level;
+
+            var p = self.level_cb_first;
+
+            self.list_mutex.lock();
+            defer self.list_mutex.unlock();
+
+            while (p) |a_callback|
+            {
+                const a_pin_mask = @as( u32, 1 ) << a_callback.pin;
+
+                if ((changed & a_pin_mask) != 0)
+                {
+                    const level = (report.level & a_pin_mask) != 0;
+
+                    if (    a_callback.edge == .either
+                        or (a_callback.edge == .rising  and  level)
+                        or (a_callback.edge == .falling and !level))
+                    {
+                        a_callback.func( Pin{ .pin = a_callback.pin, .gpio = self },
+                                         @enumFromInt( @intFromBool( level ) ),
+                                         report.tick,
+                                         a_callback.context );
+                    }
+                }
+                p = a_callback.next;
+            }
+        }
+        // else
+        // {
+        //     const g = report.flags & 0x1F;
+
+        //     var p = self.level_cb_first;
+
+        //     while (p) |a_callback|
+        //     {
+        //         if (a_callback.gpio == g)
+        //         {
+        //             a_callback.func( a_callback.gpio,
+        //                              .timeout,
+        //                              report.tick,
+        //                              a_callback.context );
+
+        //         }
+        //         p = a_callback.next;
+        //     }
+        // }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -878,152 +1561,6 @@ fn convertError( in_err : i32 ) PiGPIOError
 }
 
 // =============================================================================
-//  Structure Stream
-// =============================================================================
-
-/// This structure manages a communications stream with the pigpiod daemon.
-
-const Stream = struct
-{
-    stream    : std.net.Stream   = undefined,
-    mutex     : std.Thread.Mutex = .{},
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.open
-    // -------------------------------------------------------------------------
-
-    fn open( self     : *Stream,
-             in_alloc : std.mem.Allocator,
-             in_addr  : []const u8,
-             in_port  : u16 ) InitError!void
-    {
-        self.stream   = try std.net.tcpConnectToHost( in_alloc,
-                                                      in_addr,
-                                                      in_port );
-
-
-        // ### TODO ### Zig Workaround ## Zig needs better way to set NODELAY.
-
-        const opt : u32          = 1;
-        const op  : [*] const u8 = @ptrCast( &opt );
-
-        try std.posix.setsockopt( self.stream.handle,
-                                  std.os.linux.IPPROTO.TCP,
-                                  std.os.linux.TCP.NODELAY,
-                                  op[0..4] );
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.close
-    // -------------------------------------------------------------------------
-
-    fn close( self : *Stream ) void
-    {
-        self.stream.close();
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.doCmd
-    // -------------------------------------------------------------------------
-    /// Run a transaction with a pigpiod daemon.  If the result value returned
-    /// by the daemon is negative, an appropriate error code is returned.
-    /// Otherwise the positive result is returned.
-
-    fn doCmd( self       : *Stream,
-              in_cmd     : Command,
-              in_unlock  : bool,
-              in_p1      : u32,
-              in_p2      : u32,
-              in_extents : ?[] const Extent ) Error!u32
-    {
-        const result = try self.doCmdBasic( in_cmd,
-                                            in_unlock,
-                                            in_p1,
-                                            in_p2,
-                                            in_extents );
-
-        const status : i32 = @bitCast( result );
-
-        if (status < 0) return convertError( status );
-
-        return result;
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.doCmdBasic
-    // -------------------------------------------------------------------------
-    /// Run a transaction with a pigpiod daemon.  Returns the
-    /// result value without checking for error codes.
-
-    fn doCmdBasic( self       : *Stream,
-                   in_cmd     : Command,
-                   in_unlock  : bool,
-                   in_p1      : u32,
-                   in_p2      : u32,
-                   in_extents : ?[] const Extent ) Error!u32
-    {
-        var   hdr : Header = .{ .cmd = @intFromEnum( in_cmd ),
-                                .p1  = in_p1,
-                                .p2  = in_p2,
-                                .p3  = 0 };
-
-        if (in_extents) |e|
-        {
-            for (e) |an_extent|
-            {
-                std.debug.assert( hdr.p3 + an_extent.len < 0xFFFF_FFFF );
-
-                hdr.p3 += @intCast( an_extent.len );
-            }
-
-            // log.debug( "send hdr.p3 = {}", .{ hdr.p3 } );
-        }
-
-        self.mutex.lock();
-        errdefer self.mutex.unlock();
-
-        _ = try self.stream.write( std.mem.asBytes( &hdr ) );
-
-        if (in_extents) |e|
-        {
-            for (e) |an_extent|
-            {
-                // log.debug( "send extent len: {} - {any} ", .{ an_extent.len, an_extent } );
-
-                _ = try self.stream.write( an_extent );
-            }
-        }
-
-        _ = try self.stream.read( std.mem.asBytes( &hdr ) );
-
-        if (hdr.cmd != @intFromEnum( in_cmd )) return error.bad_recv;
-
-        if (in_unlock) self.mutex.unlock();
-
-        return hdr.p3;
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.write
-    // -------------------------------------------------------------------------
-
-    fn write( self: Stream, buffer: [] const u8 ) WriteError!usize
-    {
-        self.stream.write( buffer );
-    }
-
-    // -------------------------------------------------------------------------
-    //  Function: Stream.read
-    // -------------------------------------------------------------------------
-
-    fn read( self: Stream, buffer: []u8 ) ReadError!usize
-    {
-        self.stream.read( buffer );
-    }
-
-};
-
-// =============================================================================
 //  Structure Pin
 // =============================================================================
 
@@ -1033,37 +1570,7 @@ pub const Pin = struct
 {
     gpio  : *PiGPIO,
     /// Broadcom pin number
-    pin   : u32,
-
-    // -------------------------------------------------------------------------
-    //  structure Pin.Mode
-    // -------------------------------------------------------------------------
-
-    pub const Mode = enum(u8)
-    {
-        input  = 0,
-        output = 1,
-        alt0   = 4,
-        alt1   = 5,
-        alt2   = 6,
-        alt3   = 7,
-        alt4   = 3,
-        alt5   = 2,
-    };
-
-    pub const Pull = enum(u8)
-    {
-        none = 0,
-        down = 1,
-        up   = 2,
-    };
-
-    pub const Edge = enum(u8)
-    {
-        rising  = 0,
-        falling = 1,
-        either  = 2,
-    };
+    pin   : u6,
 
     // -------------------------------------------------------------------------
     //  Function: Pin.setHigh
@@ -1300,7 +1807,7 @@ pub const Pin = struct
 
         range *= in_duty_fraction;
 
-        return try self.setPWMDutyCycle( @round( range ) );
+        return try self.setPWMDutyCycle( @intFromFloat( @round( range ) ) );
     }
 
     // -------------------------------------------------------------------------
@@ -1349,17 +1856,42 @@ pub const Pin = struct
     // ==== Pin Change Callback ================================================
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setCallback
+    // Function: Pin.addCallback
     // -------------------------------------------------------------------------
-    // /// Set a callback function that will be called if the pin's state
-    // /// changes.
+    /// Set a callback function that will be called if the pin's state
+    /// changes.
 
-    // pub fn setCallback( self    : Pin,
-    //                     in_edge : Edge,
-    //                     in_func : CBFunction ) Error!void
-    // {
-    //   _ = try self.gpio.doCmd( .XXXX, true, self.pin, in_edge, in_func, null );
-    // }
+    pub fn addCallback( self       : Pin,
+                        in_edge    : Edge,
+                        in_func    : LevelCBFunc,
+                        in_context : ?*anyopaque )!void
+    {
+        if (self.pin > 31) return error.bad_user_gpio;
+
+        try self.gpio.addLevelCallback( @intCast( self.pin ),
+                                        in_edge,
+                                        in_func,
+                                        in_context );
+    }
+
+   // -------------------------------------------------------------------------
+    // Function: Pin.remove callback
+    // -------------------------------------------------------------------------
+    /// Set a callback function that will be called if the pin's state
+    /// changes.
+
+    pub fn removeCallback( self       : Pin,
+                           in_edge    : Edge,
+                           in_func    : LevelCBFunc,
+                           in_context : ?*anyopaque ) void
+    {
+        if (self.pin > 31) return;
+
+        self.gpio.removeLevelCallback( @intCast( self.pin ),
+                                       in_edge,
+                                       in_func,
+                                       in_context );
+    }
 };
 
 
