@@ -512,9 +512,9 @@ const Command = enum(u8)
     WVCAP  = 118,
 };
 
-const PI_NTFY_FLAGS_EVENT = @as( u32, 1) << 7;
-//const PI_NTFY_FLAGS_ALIVE = @as( u32, 1) << 6;
-const PI_NTFY_FLAGS_WDOG  = @as( u32, 1) << 5;
+const PI_NTFY_FLAGS_EVENT = 1 << 7;
+//const PI_NTFY_FLAGS_ALIVE = 1 << 6;
+const PI_NTFY_FLAGS_WDOG  = 1 << 5;
 
 
 // =============================================================================
@@ -627,7 +627,7 @@ pub fn readBank1( self : *PiGPIO ) Error!u32
 // -----------------------------------------------------------------------------
 //  Public function: readBank2
 // -----------------------------------------------------------------------------
-/// Read all bank 2 GPIO pins (33-53) simultaniouslly.
+/// Read all bank 2 GPIO pins (32-53) simultaniouslly.
 ///
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
@@ -653,10 +653,10 @@ pub fn clearBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 // -----------------------------------------------------------------------------
 //  Public function: clearBank2
 // -----------------------------------------------------------------------------
-/// Clear multiple bank 2 GPIO pins (33-53) simultaniouslly.
+/// Clear multiple bank 2 GPIO pins (32-53) simultaniouslly.
 ///
 /// Parameter:
-/// - in_pins - I mask indicating the pins to clear. The low order bit is pin 33.
+/// - in_pins - I mask indicating the pins to clear. The low order bit is pin 32.
 
 pub fn clearBank2(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
@@ -679,10 +679,10 @@ pub fn setBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 // -----------------------------------------------------------------------------
 //  Public function: setBank2
 // -----------------------------------------------------------------------------
-/// Set multiple bank 2 GPIO pins (33-53) simultaniouslly.
+/// Set multiple bank 2 GPIO pins (32-53) simultaniouslly.
 ///
 /// Parameter:
-/// - in_pins - I mask indicating the pins to set. The low order bit is pin 33.
+/// - in_pins - I mask indicating the pins to set. The low order bit is pin 32.
 
 pub fn setBank2( self : *PiGPIO, in_pins : u32 ) Error!void
 {
@@ -712,12 +712,12 @@ pub fn maskedUpdateBank1( self      : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedUpdateBank2
 // -----------------------------------------------------------------------------
-/// Update a subset of bank 1 GPIO pins (33-53) simultaniouslly.
+/// Update a subset of bank 1 GPIO pins (32-53) simultaniouslly.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
 /// - in_mask   - I mask indicating which pins to update.
-/// The low order bit is pin 33.
+/// The low order bit is pin 32.
 
 pub fn maskedUpdateBank2( self      : *PiGPIO,
                           in_values : u32,
@@ -749,7 +749,7 @@ pub fn maskedSetModeBank1( self    : *PiGPIO,
         {
             _ = try self.doCmd( .MODES,
                                 true,
-                                @intCast( p + 1 ),
+                                @intCast( p ),
                                 @intFromEnum( in_mode ),
                                 null );
         }
@@ -759,12 +759,12 @@ pub fn maskedSetModeBank1( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedSetModeBank2
 // -----------------------------------------------------------------------------
-/// Set the mode a subset of bank 1 GPIO pins (33-53) simultaniouslly.
+/// Set the mode a subset of bank 1 GPIO pins (32-53) simultaniouslly.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
 /// - in_mask   - I mask indicating which pins to update.
-/// The low order bit is pin 33.
+/// The low order bit is pin 32.
 
 pub fn maskedSetModeBank2( self    : *PiGPIO,
                            in_mode : Mode,
@@ -776,7 +776,7 @@ pub fn maskedSetModeBank2( self    : *PiGPIO,
         {
             _ = try self.doCmd( .MODES,
                                 true,
-                                @intCast( p + 33 ),
+                                @intCast( p + 32 ),
                                 @intFromEnum( in_mode ),
                                 null );
         }
@@ -803,7 +803,7 @@ pub fn maskedSetPullBank1( self    : *PiGPIO,
         {
             _ = try self.doCmd( .PUD,
                                 true,
-                                @intCast( p + 1 ),
+                                @intCast( p ),
                                 @intFromEnum( in_pull ),
                                 null );
         }
@@ -813,12 +813,12 @@ pub fn maskedSetPullBank1( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedSetPullBank2
 // -----------------------------------------------------------------------------
-/// Set the mode a subset of bank 1 GPIO pins (33-53) simultaniouslly.
+/// Set the mode a subset of bank 1 GPIO pins (32-53) simultaniouslly.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
 /// - in_mask   - I mask indicating which pins to update.
-/// The low order bit is pin 33.
+/// The low order bit is pin 32.
 
 pub fn maskedSetPullBank2( self    : *PiGPIO,
                            in_pull : Pull,
@@ -830,7 +830,7 @@ pub fn maskedSetPullBank2( self    : *PiGPIO,
         {
             _ = try self.doCmd( .PUD,
                                 true,
-                                @intCast( p + 33 ),
+                                @intCast( p + 32 ),
                                 @intFromEnum( in_pull ),
                                 null );
         }
