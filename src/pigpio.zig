@@ -305,6 +305,7 @@ pub const Edge = enum(u8)
     falling = 0,
     rising  = 1,
     either  = 2,
+    timeout = 3, // used for timeout return events only
 };
 
 // -----------------------------------------------------------------------------
@@ -316,7 +317,7 @@ const LevelCBFunc = * const fn ( in_pin     : Pin,
                                  in_context : ?*anyopaque ) void;
 
 const EventCBFunc = * const fn ( in_gpio    : *PiGPIO,
-                                 in_event   : u32,
+                                 in_event   : u5,
                                  in_tick    : u32,
                                  in_context : ?*anyopaque ) void;
 
@@ -511,6 +512,9 @@ const Command = enum(u8)
     WVCAP  = 118,
 };
 
+const PI_NTFY_FLAGS_EVENT = @as( u32, 1) << 7;
+//const PI_NTFY_FLAGS_ALIVE = @as( u32, 1) << 6;
+const PI_NTFY_FLAGS_WDOG  = @as( u32, 1) << 5;
 
 
 // =============================================================================
@@ -944,7 +948,7 @@ pub fn custom2( self    : *PiGPIO,
 /// changes.
 
 fn addEventCallback( self       : *PiGPIO,
-                     in_event   : u32,
+                     in_event   : u5,
                      in_func    : EventCBFunc,
                      in_context : ?*anyopaque )!void
 {
@@ -979,7 +983,7 @@ fn addEventCallback( self       : *PiGPIO,
 /// changes.
 
 fn removeEventCallback( self       : *PiGPIO,
-                        in_event   : u32,
+                        in_event   : u5,
                         in_func    : EventCBFunc,
                         in_context : ?*anyopaque )void
 {
@@ -1017,6 +1021,16 @@ fn removeEventCallback( self       : *PiGPIO,
     }
 }
 
+// -----------------------------------------------------------------------------
+//  Public function: triggerEvent
+// -----------------------------------------------------------------------------
+/// Get the version number from the pigpiod daemon.
+
+pub fn triggerEvent( self : *PiGPIO, in_event : u5 ) Error!void
+{
+    return try self.doCmd( .EVT, true, in_event, 0, null );
+}
+
 // =============================================================================
 //  Private Functions
 // =============================================================================
@@ -1030,9 +1044,6 @@ fn extentFrom( T : type, in_val : * const T ) Extent
     const p : [*] const u8 = @ptrCast( in_val );
 
     const result : Extent = p[0..@sizeOf( T )];
-
-    // log.debug( "{any} >> {*} >> {*} >> {any}",
-    //            .{ in_val.*, in_val, p, result } );
 
     return result;
 }
@@ -1236,7 +1247,7 @@ fn updateNotifyBits( self : *PiGPIO ) !void
     {
         self.notify_bits = bits;
 
-        log.debug( "NB {X} {X}", .{ self.notify_handle, bits } );
+        // log.debug( "NB {X} {X}", .{ self.notify_handle, bits } );
 
         _ = try self.doCmd( .NB, true, self.notify_handle, bits, null );
     }
@@ -1363,25 +1374,44 @@ fn notifyThread( self : *PiGPIO ) void
                 p = a_callback.next;
             }
         }
-        // else
-        // {
-        //     const g = report.flags & 0x1F;
+        else if ((report.flags & PI_NTFY_FLAGS_WDOG) != 0)
+        {
+            var p = self.level_cb_first;
 
-        //     var p = self.level_cb_first;
+            self.list_mutex.lock();
+            defer self.list_mutex.unlock();
 
-        //     while (p) |a_callback|
-        //     {
-        //         if (a_callback.gpio == g)
-        //         {
-        //             a_callback.func( a_callback.gpio,
-        //                              .timeout,
-        //                              report.tick,
-        //                              a_callback.context );
+            while (p) |a_callback|
+            {
+                if (a_callback.pin == (report.flags & 0x1F))
+                {
+                    a_callback.func( Pin{ .pin = a_callback.pin, .gpio = self },
+                                     .timeout,
+                                     report.tick,
+                                     a_callback.context );
+                }
+                p = a_callback.next;
+            }
+        }
+        else if ((report.flags & PI_NTFY_FLAGS_EVENT) != 0)
+        {
+            var p = self.event_cb_first;
 
-        //         }
-        //         p = a_callback.next;
-        //     }
-        // }
+            self.list_mutex.lock();
+            defer self.list_mutex.unlock();
+
+            while (p) |a_callback|
+            {
+                if (a_callback.event == (report.flags & 0x1F))
+                {
+                    a_callback.func( self,
+                                     @intCast( report.flags & 0x1F ),
+                                     report.tick,
+                                     a_callback.context );
+                }
+                p = a_callback.next;
+            }
+        }
     }
 }
 
@@ -1575,9 +1605,9 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setHigh
     // -------------------------------------------------------------------------
-    //  Set the pin output to the high state.
-    //
-    //  Does nothing if the pin is not set to be an output pin.
+    ///  Set the pin output to the high state.
+    ///
+    ///  Does nothing if the pin is not set to be an output pin.
 
     pub fn setHigh( self : Pin ) Error!void
     {
@@ -1587,9 +1617,9 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setLow
     // -------------------------------------------------------------------------
-    //  Set the pin output to the low state.
-    //
-    //  Does nothing if the pin is not set to be an output pin.
+    ///  Set the pin output to the low state.
+    ///
+    ///  Does nothing if the pin is not set to be an output pin.
 
     pub fn setLow( self : Pin ) Error!void
     {
@@ -1599,9 +1629,9 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.set
     // -------------------------------------------------------------------------
-    //  Set the pin output state based on boolean parameter.
-    //
-    //  Does nothing if the pin is not set to be an output pin.
+    ///  Set the pin output state based on boolean parameter.
+    ///
+    ///  Does nothing if the pin is not set to be an output pin.
 
     pub fn set( self : Pin, in_value : bool ) Error!void
     {
@@ -1615,7 +1645,7 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.get
     // -------------------------------------------------------------------------
-    //  Get the logic state of a pin.
+    ///  Get the logic state of a pin.
 
     pub fn get( self : Pin ) Error!bool
     {
@@ -1623,9 +1653,26 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
+    //  Function: Pin.trigger
+    // -------------------------------------------------------------------------
+    ///  trigger a pulse on the gpio pin.
+
+    pub fn trigger( self : Pin, in_width : u32, in_level : bool ) Error!void
+    {
+        const val : u32 = @intFromBool( in_level );
+        const ext = [1]Extent{ extentFrom( u32, &val ) };
+
+        return try self.gpio.doCmd( .TRIG,
+                                    true,
+                                    self.pin,
+                                    in_width,
+                                    ext ) != 0;
+    }
+
+    // -------------------------------------------------------------------------
     //  Function: Pin.setMode
     // -------------------------------------------------------------------------
-    // Set the pin mode.
+    /// Set the pin mode.
 
     pub fn setMode(  self : Pin, in_mode : Mode ) Error!void
     {
@@ -1639,7 +1686,7 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.getMode
     // -------------------------------------------------------------------------
-    // Get the current pin mode.
+    /// Get the current pin mode.
 
     pub fn getMode( self : Pin ) Error!Mode
     {
@@ -1651,7 +1698,7 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setPull
     // -------------------------------------------------------------------------
-    // Set the pin pull resistor state.
+    /// Set the pin pull resistor state.
 
     pub fn setPull(  self : Pin, in_pull : Pull ) Error!void
     {
@@ -1665,7 +1712,7 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setPadStrength
     // -------------------------------------------------------------------------
-    // Set the pin's drive strength.
+    /// Set the pin's drive strength.
 
     pub fn setPadStrength(  self : Pin, in_strength : u32 ) Error!void
     {
@@ -1675,7 +1722,7 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.getPadStrength
     // -------------------------------------------------------------------------
-    // Get the pin's drive strength.
+    /// Get the pin's drive strength.
 
     pub fn getPadStrength(  self : Pin ) Error!u32
     {
@@ -1770,6 +1817,16 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
+    //  Function: Pin.getPWMRealRange
+    // -------------------------------------------------------------------------
+    /// Get the currently set PWM range.
+
+    pub fn getPWMRealRange( self : Pin ) Error!u32
+    {
+        return try self.gpio.doCmd( .PRRG, true, self.pin, 0, null );
+    }
+
+    // -------------------------------------------------------------------------
     //  Function: Pin.setPWMDutyCycle
     // -------------------------------------------------------------------------
     /// Set the PWM duty cycle.  A value of 0 indicates a 0% duty cycle, and
@@ -1794,8 +1851,8 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.setPWMDutyFractiom
     // -------------------------------------------------------------------------
-    // Sets the duty cycle based on a fraction that must be between 0 and
-    // 1 (inclusive).
+    /// Sets the duty cycle based on a fraction that must be between 0 and
+    /// 1 (inclusive).
 
     pub fn setPWMDutyFractiom( self             : Pin,
                                in_duty_fraction : f32 ) Error!void
@@ -1813,8 +1870,8 @@ pub const Pin = struct
     // -------------------------------------------------------------------------
     //  Function: Pin.getPWMDutyFractiom
     // -------------------------------------------------------------------------
-    // Gets the duty cycle as a fraction that must be between 0 and
-    // 1 (inclusive).
+    /// Gets the duty cycle as a fraction that must be between 0 and
+    /// 1 (inclusive).
 
     pub fn getPWMDutyFractiom( self : Pin ) Error!f32
     {
@@ -1853,7 +1910,7 @@ pub const Pin = struct
         return try self.gpio.doCmd( .GPW, true, self.pin, 0, null );
     }
 
-    // ==== Pin Change Callback ================================================
+    // ==== Pin Callback Setup =================================================
 
     // -------------------------------------------------------------------------
     // Function: Pin.addCallback
@@ -1867,6 +1924,11 @@ pub const Pin = struct
                         in_context : ?*anyopaque )!void
     {
         if (self.pin > 31) return error.bad_user_gpio;
+
+        // We cannot set a callback on the .timeout value.  Use the
+        // watchdog command instead.
+
+        std.debug.assert( in_edge != .timeout );
 
         try self.gpio.addLevelCallback( @intCast( self.pin ),
                                         in_edge,
@@ -1891,6 +1953,20 @@ pub const Pin = struct
                                        in_edge,
                                        in_func,
                                        in_context );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: Pin.setWatchdog
+    // -------------------------------------------------------------------------
+    ///  Set a watchdog timeout on a pine.
+
+    pub fn setWatchdog( self : Pin, in_timeout : u32 ) Error!void
+    {
+        return try self.gpio.doCmd( .WDOG,
+                                    true,
+                                    self.pin,
+                                    in_timeout,
+                                    null ) != 0;
     }
 };
 
