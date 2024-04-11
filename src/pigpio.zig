@@ -2118,26 +2118,26 @@ pub const SPI = struct
     /// Note: the SPI bus sends zeros when reading data.
 
     pub fn read( self         : SPI,
-                 out_rx_slice : []u8 ) SPIError!u32
+                 out_rx_slice : []u8 ) SPIError!void
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
         if (self.gpio) |gpio|
         {
-            const result = try gpio.doCmd( .spi_read,
-                                           false,
-                                           self.spi,
-                                           out_rx_slice.len,
-                                           null );
+            _ = try gpio.doCmd( .spi_read,
+                                false,
+                                self.spi,
+                                @intCast( out_rx_slice.len ),
+                                null );
 
-            defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
-            try gpio.cmd_stream.read( out_rx_slice );
-
-            return result;
+            _ = try gpio.cmd_stream.read( out_rx_slice );
         }
-
-        return error.NotOpen;
+        else
+        {
+            return error.NotOpen;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -2158,10 +2158,11 @@ pub const SPI = struct
         if (self.gpio) |gpio|
         {
             _ = try gpio.doCmd( .spi_write, true, self.spi,  0, &ext );
-            return;
         }
-
-        return error.NotOpen;
+        else
+        {
+            return error.NotOpen;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -2176,18 +2177,25 @@ pub const SPI = struct
 
     pub fn transfer( self          : SPI,
                      in_tx_slice   : [] const u8,
-                     out_rx_slice  : []u8 ) Error!void
+                     out_rx_slice  : []u8 ) SPIError!void
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
 
         const ext = [_]Extent{ in_tx_slice };
 
-        _ = try self.gpio.doCmd( .spi_trasfer, false, self.spi, 0, &ext );
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .spi_trasfer, false, self.spi, 0, &ext );
 
-        defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
-        try self.gpio.cmd_stream.read( out_rx_slice );
+            _ = try gpio.cmd_stream.read( out_rx_slice );
+        }
+        else
+        {
+            return error.NotOpen;
+        }
     }
 };
 
@@ -2273,7 +2281,7 @@ pub const I2C = struct
                                            out_rx_slice.len,
                                            null );
 
-            defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
             try gpio.cmd_stream.read( out_rx_slice );
 
@@ -2470,7 +2478,7 @@ pub const I2C = struct
                                             in_register,
                                             ext );
 
-            defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
             try gpio.cmd_stream.read( out_rx_slice );
 
@@ -2525,7 +2533,7 @@ pub const I2C = struct
                                             in_register,
                                             null );
 
-            defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
             try gpio.cmd_stream.read( out_rx_slice );
 
@@ -2560,7 +2568,7 @@ pub const I2C = struct
                                             in_register,
                                             ext );
 
-            defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
             try gpio.cmd_stream.read( out_rx_slice );
 
@@ -2596,7 +2604,7 @@ pub const I2C = struct
                                             in_register,
                                             ext );
 
-            defer self.gpio.unlockCmdMutex();
+            defer gpio.cmd_mutex.unlock();
 
             try gpio.cmd_stream.read( out_rx_slice );
 
@@ -2610,6 +2618,11 @@ pub const I2C = struct
 // =============================================================================
 //  Testing
 // =============================================================================
+//  Since these test drive the GPIO pins, the tests rely on some specific
+//  connection to the pins.
+//
+//  GPIO  6 - Connect an LED
+
 
 const testing = std.testing;
 
@@ -2639,11 +2652,41 @@ test "Connection"
     std.log.warn("\nGVer: {!}", .{ gpio.getPiGPIOVersion() });
 }
 
-test "custom command"
+// -----------------------------------------------------------------------------
+
+test "Block Transfer"
 {
     var gpio : PiGPIO = .{};
 
-    try gpio.connect( testing.allocator, "::", 8888 );
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    _ = try gpio.readBank1();
+    _ = try gpio.readBank2();
+
+    try gpio.clearBank1( 1 << 6 );
+    // try.gpio.clearBank2( 1 << 6  );
+
+    try gpio.setBank1( 1 << 6  );
+    // try.gpio.setBank2( 1 << 6  );
+
+    try gpio.maskedUpdateBank1( 0xFFFF_FFFF, 1 << 6 );
+    try gpio.maskedSetModeBank1( .input, 1 << 6 );
+    try gpio.maskedSetPullBank1( .none, 1 << 6 );
+
+}
+
+// -----------------------------------------------------------------------------
+
+test "custom command"
+{
+    // This test assumes that the pigpiod daemon is built with the
+    // default custom1 and custom2 function.  It will fail if those
+    // functions were replaced.
+
+    var gpio : PiGPIO = .{};
+
+    try gpio.connect( testing.allocator, null, null );
     defer gpio.disconnect();
 
     try testing.expect( try gpio.custom1( 1, 2, "three" ) == 116 );
@@ -2653,37 +2696,54 @@ test "custom command"
     try testing.expectEqualStrings(  &reply, "owt" );
 }
 
+// -----------------------------------------------------------------------------
+
 test "basic pin test"
 {
-  var gpio : PiGPIO = .{};
+  var   gpio : PiGPIO = .{};
+  const digital_pin   = gpio.pin(  6 );
+//   const pwm_pin       = gpio.pin(  6 );
+//   const servi_pin     = gpio.pin(  6 );
 
   try gpio.connect( testing.allocator, null, null );
   defer gpio.disconnect();
 
-  const test_pin  = gpio.pin(  6 );
 
-  try test_pin.setMode( .input );
-  try test_pin.setPull( .up );
+  try digital_pin.setMode( .input );
+  try digital_pin.setPull( .up );
   std.time.sleep( 100_000 );
-  try testing.expect( try test_pin.get() == true );
-  try test_pin.setPull( .down );
+  try testing.expect( try digital_pin.get() == true );
+  try digital_pin.setPull( .down );
   std.time.sleep( 100_000 );
-  try testing.expect( try test_pin.get() == false );
-  try test_pin.setPull( .none );
+  try testing.expect( try digital_pin.get() == false );
+  try digital_pin.setPull( .none );
 
-  try test_pin.setMode( .output );
-  try test_pin.setLow();
+  try digital_pin.setMode( .output );
+  try digital_pin.setLow();
   std.time.sleep( 1_000_000_000 );
-  try test_pin.set( true );
+  try digital_pin.set( true );
   std.time.sleep( 1_000_000_000 );
-  try test_pin.set( false );
+  try digital_pin.set( false );
   std.time.sleep( 1_000_000_000 );
-  try test_pin.setHigh();
+  try digital_pin.setHigh();
 }
 
 // -----------------------------------------------------------------------------
 
-// test "Send SPI"
-// {
+test "SPI"
+{
+    var gpio : PiGPIO = .{};
+    var spi  : PiGPIO.SPI = .{};
 
-// }
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try spi.open( &gpio, testing.allocator, 0, 6_000_000, .{} );
+    defer spi.close();
+
+    var  buffer : [32]u8 = .{ 0 } ** 32;
+
+    try spi.read( &buffer );
+    try spi.write( &buffer );
+    try spi.transfer( &buffer, &buffer );
+}
