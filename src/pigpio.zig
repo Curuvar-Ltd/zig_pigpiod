@@ -269,7 +269,10 @@ pub const Error      =    std.posix.WriteError
                        || PiGPIOError;
 
 pub const SPIError   =    Error
-                       || error{ SPINotOpen };
+                       || error{ NotOpen };
+
+pub const I2CError   =    Error
+                       || error{ NotOpen };
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  Public Type Definitions
@@ -370,33 +373,33 @@ const EventCallback = struct
 /// Commands supported by pigpiod daemon.
 const Command = enum(u8)
 {
-    MODES   = 0,
-    MODEG   = 1,
-    PUD     = 2,
-    READ    = 3,
-    WRITE   = 4,
-    PWM     = 5,
-    PRS     = 6,
-    PFS     = 7,
-    SERVO   = 8,
-    WDOG    = 9,
-    BR1    = 10,
-    BR2    = 11,
-    BC1    = 12,
-    BC2    = 13,
-    BS1    = 14,
-    BS2    = 15,
-    TICK   = 16,
-    HWVER  = 17,
+    mode_set       =   0,
+    mode_get       =   1,
+    pull_set       =   2,
+    pin_get        =   3,
+    pin_set        =   4,
+    pwm_duty_set   =   5,
+    pwm_rate_set   =   6,
+    pwm_freq_set   =   7,
+    servo_set      =   8,
+    wdog_set       =   9,
+    band_read_1    =  10,
+    band_read_2    =  11,
+    band_clear_1   =  12,
+    band_clear_2   =  13,
+    band_set_1     =  14,
+    band_set_2     =  15,
+    tick_get       =  16,
+    hw_ver_get     =  17,
     NO     = 18,
     NB     = 19,
     NP     = 20,
     NC     = 21,
-    PRG    = 22,
-    PFG    = 23,
-    PRRG   = 24,
+    pwm_rate_get   =  22,
+    pwm_freq_get   =  23,
+    pwm_real_range =  24,
     HELP   = 25,
-    PIGPV  = 26,
+    version_get    =  26,
     WVCLR  = 27,
     WVAG   = 28,
     WVAS   = 29,
@@ -407,7 +410,7 @@ const Command = enum(u8)
     WVSM   = 34,
     WVSP   = 35,
     WVSC   = 36,
-    TRIG   = 37,
+    pin_trigger    =  37,
     PROC   = 38,
     PROCD  = 39,
     PROCR  = 40,
@@ -425,29 +428,29 @@ const Command = enum(u8)
     WVTXR  = 52,
     WVNEW  = 53,
 
-    I2CO   = 54,
-    I2CC   = 55,
-    I2CRD  = 56,
-    I2CWD  = 57,
-    I2CWQ  = 58,
-    I2CRS  = 59,
-    I2CWS  = 60,
-    I2CRB  = 61,
-    I2CWB  = 62,
-    I2CRW  = 63,
-    I2CWW  = 64,
-    I2CRK  = 65,
-    I2CWK  = 66,
-    I2CRI  = 67,
-    I2CWI  = 68,
-    I2CPC  = 69,
-    I2CPK  = 70,
+    i2c_open       =  54,
+    i2c_close      =  55,
+    i2c_rx_raw     =  56,
+    i2c_tx_raw     =  57,
+    i2c_tx_quick   =  58,
+    i2c_tx_raw_u8  =  59,
+    i2c_rx_raw_u8  =  60,
+    i2c_rx_u8      =  61,
+    i2c_tx_u8      =  62,
+    i2c_rx_u16     =  63,
+    i2c_tx_u16     =  64,
+    i2c_rx_block   =  65,
+    i2c_tx_block   =  66,
+    i2c_rx_i2c_blk =  67,
+    i2c_tx_i2c_blk =  68,
+    i2c_proc_call  =  69,
+    i2c_zip        =  70,
 
-    SPIO   = 71,
-    SPIC   = 72,
-    SPIR   = 73,
-    SPIW   = 74,
-    SPIX   = 75,
+    spi_open       =  71,
+    spi_close      =  72,
+    spi_read       =  73,
+    spi_write      =  74,
+    spi_trasfer    =  75,
 
     SERO   = 76,
     SERC   = 77,
@@ -457,14 +460,14 @@ const Command = enum(u8)
     SERW   = 81,
     SERDA  = 82,
 
-    GDC    = 83,
-    GPW    = 84,
+    pwm_duty_get    = 83,
+    servo_get       = 84,
 
     HC     = 85,
     HP     = 86,
 
-    CF1    = 87,
-    CF2    = 88,
+    custom_1       =  87,
+    custom_2       =  88,
 
     BI2CC  = 89,
     BI2CO  = 90,
@@ -479,16 +482,16 @@ const Command = enum(u8)
     CGI    = 95,
     CSI    = 96,
 
-    FG     = 97,
-    FN     = 98,
+    glitch_filter  = 97,
+    noise_filter   = 98,
 
-    NOIB   = 99,  // Inform server that this is the notify stream.
+    begin_notify   = 99,  // Inform server that this is the notify stream.
 
     WVTXM  = 100,
     WVTAT  = 101,
 
-    PADS   = 102,
-    PADG   = 103,
+    current_set   = 102,
+    current_get   = 103,
 
     FO     = 104,
     FC     = 105,
@@ -497,7 +500,7 @@ const Command = enum(u8)
     FS     = 108,
     FL     = 109,
 
-    SHELL  = 110,
+    shell_cmd      = 110,
 
     BSPIC  = 111,
     BSPIO  = 112,
@@ -506,7 +509,7 @@ const Command = enum(u8)
     BSCX   = 114,
 
     EVM    = 115,
-    EVT    = 116,
+    trigger_event  = 116,
 
     PROCU  = 117,
     WVCAP  = 118,
@@ -629,7 +632,7 @@ pub fn pin( self : *PiGPIO, in_pin : u6 ) Pin
 
 pub fn readBank1( self : *PiGPIO ) Error!u32
 {
-    return try self.doCmdBasic( .BR1, true, 0, 0, null );
+    return try self.doCmdBasic( .band_read_1, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -642,7 +645,7 @@ pub fn readBank1( self : *PiGPIO ) Error!u32
 
 pub fn readBank2( self : *PiGPIO )  Error!u32
 {
-    return try self.doCmdBasic( .BR2, true, 0, 0, null );
+    return try self.doCmdBasic( .band_read_2, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -655,7 +658,7 @@ pub fn readBank2( self : *PiGPIO )  Error!u32
 
 pub fn clearBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.doCmd( .BC1, true, in_pins, 0, null );
+    _ = try self.doCmd( .band_clear_1, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -668,7 +671,7 @@ pub fn clearBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 
 pub fn clearBank2(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.doCmd( .BC2, true, in_pins, 0, null );
+    _ = try self.doCmd( .band_clear_2, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -681,7 +684,7 @@ pub fn clearBank2(  self : *PiGPIO, in_pins : u32 ) Error!void
 
 pub fn setBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.doCmd( .BS1, true, in_pins, 0, null );
+    _ = try self.doCmd( .band_set_1, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -694,7 +697,7 @@ pub fn setBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 
 pub fn setBank2( self : *PiGPIO, in_pins : u32 ) Error!void
 {
-    _ = try self.doCmd( .BS2, true, in_pins, 0, null );
+    _ = try self.doCmd( .band_set_2, true, in_pins, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -712,9 +715,9 @@ pub fn maskedUpdateBank1( self      : *PiGPIO,
                           in_mask   : u32 ) Error!void
 {
     var p = in_values & in_mask;
-    if (p != 0) _ = try self.doCmd( .BS1, true, p, 0, null );
+    if (p != 0) _ = try self.doCmd( .band_set_1, true, p, 0, null );
     p = ~p & in_mask;
-    if (p != 0) _ = try self.doCmd( .BC1, true, p, 0, null );
+    if (p != 0) _ = try self.doCmd( .band_clear_1, true, p, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -732,9 +735,9 @@ pub fn maskedUpdateBank2( self      : *PiGPIO,
                           in_mask   : u32 ) Error!void
 {
     var p = in_values & in_mask;
-    if (p != 0) _ = try self.doCmd( .BS2, true, p, 0, null );
+    if (p != 0) _ = try self.doCmd( .band_set_2, true, p, 0, null );
     p = ~p & in_mask;
-    if (p != 0) _ = try self.doCmd( .BC2, true, p, 0, null );
+    if (p != 0) _ = try self.doCmd( .band_clear_2, true, p, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -755,7 +758,7 @@ pub fn maskedSetModeBank1( self    : *PiGPIO,
     {
         if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
         {
-            _ = try self.doCmd( .MODES,
+            _ = try self.doCmd( .mode_set,
                                 true,
                                 @intCast( p ),
                                 @intFromEnum( in_mode ),
@@ -782,7 +785,7 @@ pub fn maskedSetModeBank2( self    : *PiGPIO,
     {
         if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
         {
-            _ = try self.doCmd( .MODES,
+            _ = try self.doCmd( .mode_set,
                                 true,
                                 @intCast( p + 32 ),
                                 @intFromEnum( in_mode ),
@@ -809,7 +812,7 @@ pub fn maskedSetPullBank1( self    : *PiGPIO,
     {
         if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
         {
-            _ = try self.doCmd( .PUD,
+            _ = try self.doCmd( .pull_set,
                                 true,
                                 @intCast( p ),
                                 @intFromEnum( in_pull ),
@@ -836,7 +839,7 @@ pub fn maskedSetPullBank2( self    : *PiGPIO,
     {
         if ((in_mask & (@as( u32, 1 ) << @intCast( p ))) != 0)
         {
-            _ = try self.doCmd( .PUD,
+            _ = try self.doCmd( .pull_set,
                                 true,
                                 @intCast( p + 32 ),
                                 @intFromEnum( in_pull ),
@@ -850,9 +853,9 @@ pub fn maskedSetPullBank2( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 /// Get the current tick (microseconds) from the pgpiod daemon.
 
-pub fn getCurrentTick( self : *PiGPIO ) Error!void
+pub fn getCurrentTick( self : *PiGPIO ) Error!u32
 {
-    return try self.doCmdBasic( .TICK, true, 0, 0, null );
+    return try self.doCmdBasic( .tick_get, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -860,9 +863,9 @@ pub fn getCurrentTick( self : *PiGPIO ) Error!void
 // -----------------------------------------------------------------------------
 /// Get the hardware version from the pgpiod daemon.
 
-pub fn getHardwareVersion( self : *PiGPIO ) Error!void
+pub fn getHardwareVersion( self : *PiGPIO ) Error!u32
 {
-    return try self.doCmd( .HWVER, true, 0, 0, null );
+    return try self.doCmd( .hw_ver_get, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -870,9 +873,9 @@ pub fn getHardwareVersion( self : *PiGPIO ) Error!void
 // -----------------------------------------------------------------------------
 /// Get the version number from the pigpiod daemon.
 
-pub fn getPiGPIOVersion( self : *PiGPIO ) Error!void
+pub fn getPiGPIOVersion( self : *PiGPIO ) Error!u32
 {
-    return try self.doCmd( .PIGPV, true, 0, 0, null );
+    return try self.doCmd( .version_get, true, 0, 0, null );
 }
 
 // -----------------------------------------------------------------------------
@@ -889,9 +892,9 @@ pub fn shell( self     : *PiGPIO,
               in_param : [] const u8 ) Error!u32
 {
     const sep = [1]u8{ 0 };
-    const ext = [3]Extent{ in_name, &sep, in_param };
+    const ext = [_]Extent{ in_name, &sep, in_param };
 
-    return try self.doCmd( .SHELL, true, 0, 0, &ext );
+    return try self.doCmd( .shell_cmd, true, 0, 0, &ext );
 }
 
 // -----------------------------------------------------------------------------
@@ -909,13 +912,15 @@ pub fn custom1( self    : *PiGPIO,
                 in_arg2 : u32,
                 in_arg3 : [] const u8 ) Error!i32
 {
-    const ext = [1]Extent{ in_arg3 };
+    std.debug.assert( in_arg3.len <= 0xFFFF_FFFF );
 
-    const result = try self.doCmdBasic( .CF1,
-                                                   true,
-                                                   in_arg1,
-                                                   in_arg2,
-                                                   &ext );
+    const ext = [_]Extent{ in_arg3 };
+
+    const result = try self.doCmdBasic( .custom_1,
+                                        true,
+                                        in_arg1,
+                                        in_arg2,
+                                        &ext );
 
     return @bitCast( result );
 }
@@ -935,14 +940,17 @@ pub fn custom2( self    : *PiGPIO,
                 in_arg2 : [] const u8,
                 in_reply : []u8 ) Error!i32
 {
-    const ext = [1]Extent{ in_arg2 };
+    std.debug.assert( in_arg2.len <= 0xFFFF_FFFF );
+    std.debug.assert( in_reply.len <= 0xFFFF_FFFF );
 
-    const result = try self.doCmdBasic( .CF2,
-                                                   false,
-                                                   in_arg1,
-                                                   0,
-                                                   &ext );
-    defer self.gpio.unlockCmdMutex();
+    const ext = [_]Extent{ in_arg2 };
+
+    const result = try self.doCmdBasic( .custom_2,
+                                        false,
+                                        in_arg1,
+                                        @intCast( in_reply.len ),
+                                        &ext );
+    defer self.cmd_mutex.unlock();
 
     _ = try self.cmd_stream.read( in_reply );
 
@@ -1036,7 +1044,7 @@ fn removeEventCallback( self       : *PiGPIO,
 
 pub fn triggerEvent( self : *PiGPIO, in_event : u5 ) Error!void
 {
-    return try self.doCmd( .EVT, true, in_event, 0, null );
+    return try self.doCmd( .trigger_event, true, in_event, 0, null );
 }
 
 // =============================================================================
@@ -1290,7 +1298,7 @@ fn notifyThread( self : *PiGPIO ) void
 
     defer notify_stream.close();
 
-    var   hdr : Header = .{ .cmd = @intFromEnum( Command.NOIB ),
+    var   hdr : Header = .{ .cmd = @intFromEnum( Command.begin_notify ),
                             .p1  = 0,
                             .p2  = 0,
                             .p3  = 0 };
@@ -1599,7 +1607,7 @@ fn convertError( in_err : i32 ) PiGPIOError
 }
 
 // =============================================================================
-//  Structure Pin
+//  GPIO Pin Control
 // =============================================================================
 
 /// This structure manages a GPIO pin.
@@ -1619,7 +1627,7 @@ pub const Pin = struct
 
     pub fn setHigh( self : Pin ) Error!void
     {
-        _ = try self.gpio.doCmd( .WRITE, true, self.pin, 1, null );
+        _ = try self.gpio.doCmd( .pin_set, true, self.pin, 1, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1631,7 +1639,7 @@ pub const Pin = struct
 
     pub fn setLow( self : Pin ) Error!void
     {
-        _ = try self.gpio.doCmd( .WRITE, true, self.pin, 0, null );
+        _ = try self.gpio.doCmd( .pin_set, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1643,7 +1651,7 @@ pub const Pin = struct
 
     pub fn set( self : Pin, in_value : bool ) Error!void
     {
-        _ = try self.gpio.doCmd( .WRITE,
+        _ = try self.gpio.doCmd( .pin_set,
                                  true,
                                  self.pin,
                                  @intFromBool( in_value ),
@@ -1657,24 +1665,30 @@ pub const Pin = struct
 
     pub fn get( self : Pin ) Error!bool
     {
-        return try self.gpio.doCmd( .READ, true, self.pin, 0, null ) != 0;
+        return try self.gpio.doCmd( .pin_get, true, self.pin, 0, null ) != 0;
     }
 
     // -------------------------------------------------------------------------
     //  Function: Pin.trigger
     // -------------------------------------------------------------------------
     ///  trigger a pulse on the gpio pin.
+    ///
+    /// Parameters:
+    /// - in_width - pulse width in µS. (1 - 100)
+    /// - in_level - pulse polarity.
 
     pub fn trigger( self : Pin, in_width : u32, in_level : bool ) Error!void
     {
-        const val : u32 = @intFromBool( in_level );
-        const ext = [1]Extent{ extentFrom( u32, &val ) };
+        std.debug.assert( in_width >= 1  and  in_width <= 100 );
 
-        return try self.gpio.doCmd( .TRIG,
-                                    true,
-                                    self.pin,
-                                    in_width,
-                                    ext ) != 0;
+        const val : u32 = @intFromBool( in_level );
+        const ext = [_]Extent{ extentFrom( u32, &val ) };
+
+        _ = try self.gpio.doCmd( .pin_trigger,
+                                 true,
+                                 self.pin,
+                                 in_width,
+                                 &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -1684,7 +1698,7 @@ pub const Pin = struct
 
     pub fn setMode(  self : Pin, in_mode : Mode ) Error!void
     {
-        _ = try self.gpio.doCmd( .MODES,
+        _ = try self.gpio.doCmd( .mode_set,
                                  true,
                                  self.pin,
                                  @intFromEnum( in_mode ),
@@ -1698,7 +1712,7 @@ pub const Pin = struct
 
     pub fn getMode( self : Pin ) Error!Mode
     {
-        const result = try self.gpio.doCmd( .MODEG, true, self.pin, 0, null );
+        const result = try self.gpio.doCmd( .mode_get, true, self.pin, 0, null );
 
         return @enumFromInt( result );
     }
@@ -1710,7 +1724,7 @@ pub const Pin = struct
 
     pub fn setPull(  self : Pin, in_pull : Pull ) Error!void
     {
-        _ = try self.gpio.doCmd( .PUD,
+        _ = try self.gpio.doCmd( .pull_set,
                                  true,
                                  self.pin,
                                  @intFromEnum( in_pull ),
@@ -1724,7 +1738,7 @@ pub const Pin = struct
 
     pub fn setPadStrength(  self : Pin, in_strength : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .PADS, true, self.pin, in_strength, null );
+        _ = try self.gpio.doCmd( .current_set, true, self.pin, in_strength, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1734,7 +1748,7 @@ pub const Pin = struct
 
     pub fn getPadStrength(  self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .PADG, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .current_get, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1750,7 +1764,7 @@ pub const Pin = struct
 
     pub fn setGlitchFilter(  self : Pin, in_steady : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .FG, true, self.pin, in_steady, null );
+        _ = try self.gpio.doCmd( .glitch_filter, true, self.pin, in_steady, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1770,9 +1784,9 @@ pub const Pin = struct
                             in_steady : u32,
                             in_active : u32 ) Error!void
     {
-        const ext = [1]Extent{ extentFrom( u32, &in_active ) };
+        const ext = [_]Extent{ extentFrom( u32, &in_active ) };
 
-        _ = try self.gpio.doCmd( .FN, true, self.pin, in_steady,
+        _ = try self.gpio.doCmd( .noise_filter, true, self.pin, in_steady,
                                  in_active,
                                  &ext );
     }
@@ -1786,7 +1800,7 @@ pub const Pin = struct
 
     pub fn setPWMFrequency( self : Pin, in_frequency : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .PFS,
+        _ = try self.gpio.doCmd( .pwm_freq_set,
                                  true,
                                  self.pin,
                                  in_frequency,
@@ -1800,7 +1814,7 @@ pub const Pin = struct
 
     pub fn getPWMFrequency( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .PFG, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_freq_get, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1811,7 +1825,7 @@ pub const Pin = struct
 
     pub fn setPWMRange( self : Pin, in_range : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .PRS, true, self.pin, in_range, null );
+        _ = try self.gpio.doCmd( .pwm_rate_set, true, self.pin, in_range, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1821,7 +1835,7 @@ pub const Pin = struct
 
     pub fn getPWMRange( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .PRG, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_rate_get, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1831,7 +1845,7 @@ pub const Pin = struct
 
     pub fn getPWMRealRange( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .PRRG, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_real_range, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1843,7 +1857,7 @@ pub const Pin = struct
 
     pub fn setPWMDutyCycle( self : Pin, in_duty_cycle: u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .PWM, true, self.pin, in_duty_cycle, null );
+        _ = try self.gpio.doCmd( .pwm_duty_set, true, self.pin, in_duty_cycle, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1853,7 +1867,7 @@ pub const Pin = struct
 
     pub fn getPWMDutyCycle( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .GDC, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_duty_get, true, self.pin, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1905,7 +1919,7 @@ pub const Pin = struct
 
     pub fn setServoPulseWidth( self : Pin, in_width : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .SERVO, true, self.pin, in_width, null );
+        _ = try self.gpio.doCmd( .servo_set, true, self.pin, in_width, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1915,7 +1929,7 @@ pub const Pin = struct
 
     pub fn getServoPulseWidth( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .GPW, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .servo_get, true, self.pin, 0, null );
     }
 
     // ==== Pin Callback Setup =================================================
@@ -1970,7 +1984,7 @@ pub const Pin = struct
 
     pub fn setWatchdog( self : Pin, in_timeout : u32 ) Error!void
     {
-        return try self.gpio.doCmd( .WDOG,
+        return try self.gpio.doCmd( .wdog_set,
                                     true,
                                     self.pin,
                                     in_timeout,
@@ -1980,7 +1994,7 @@ pub const Pin = struct
 
 
 // =============================================================================
-//  Structure SPI
+//  SPI Master Interface
 // =============================================================================
 
 /// This stucture sets up a communication channel with hardware spi pins.
@@ -1991,41 +2005,85 @@ pub const SPI = struct
     spi       : u32                = 0,
     allocator : std.mem.Allocator  = undefined,
 
+    pub const Flags = packed struct
+    {
+        /// SPI mode select
+        mode         : u2       = 0,
+        /// Set true to make CS active high
+        cs0_invert   : bool     = false,
+        cs1_invert   : bool     = false,
+        cs2_invert   : bool     = false,
+        /// Set true to inhibit the chip select line
+        cs0_inhibit  : bool     = false,
+        cs1_inhibit  : bool     = false,
+        cs2_inhibit  : bool     = false,
+        /// Set true to select the SPI1 interface
+        aux          : bool     = false,
+        /// Select true for 3-wire operation (main interface only)
+        three_wire   : bool     = false,
+        /// Number of pad byte in 3-wire mode
+        pad          : u4       = 0,
+        /// Set true to transmit low order bit first (aux interface only)
+        tx_lsb       : bool     = false,
+        /// Set true to receive low order bif first (aux interface only)
+        rx_lsb       : bool     = false,
+        /// Set SPI word size
+        word_size    : u6       = 0,
+        unused       : u10      = 0,
+    };
 
     // -------------------------------------------------------------------------
     //  Function: SPI.open
     // -------------------------------------------------------------------------
-    /// Configure the selected pin set for SPI master operation.  The functions
-    /// in this struct perform data transfer only.  Setting of any required
-    /// chip select signals must be handled separatly.
+    /// Configure the selected channel for SPI master operation.
     ///
     /// Parameters:
     /// - in_gpio      - the PiGPIO instance to use.
     /// - in_allocator - an allocator to be use as needed.
-    /// - in_channel   - the SPI channel to configure
-    /// - in_bit_rate  - the bit rate in Hz for the channel
-    /// - in_flags     - flag bits.
+    /// - in_channel   - the SPI channel to configure.
+    /// - in_bit_rate  - the bit rate in Hz for the channel.
+    /// - in_flags     - flags.
     ///
-    /// Note: it IS safe to call this function for an open SPI channel.  The
-    ///       channel will be reconfigures to the specified settings.
+    /// There main SPI interface supports two channels and has the following
+    /// pin assignments:
+    /// - MSIO: 09
+    /// - MSOI: 10
+    /// - SCLK: 11
+    /// - Channel 0 CS: 8
+    /// - Channel 1 CS: 9
+    ///
+    /// Raspberry Pi's with the 40-pin headder also support an auxillary SPI
+    /// interface (selected by setting the SPI.Flags aux bit true). It supports
+    /// three channels and has the following pin assignments:
+    /// - MSIO: 19
+    /// - MSOI: 20
+    /// - SCLK: 21
+    /// - Channel 0 CS: 18
+    /// - Channel 1 CS: 17
+    /// - Channel 2 CS: 16
+    ///
+    /// For either interface, chip select signal can be inhibited by setting
+    /// the apporpriate Flags.cs_inhibit value to true.  In such a case the
+    /// channel nuber is ignored and the calling program must control the
+    /// chip select itself.
+    ///
+    /// Note: it IS safe to call this function for an open SPI instance.  The
+    ///       instance will be reconfigured to the specified settings.
 
     // ### TODO ### document SPI flag bits.
 
     pub fn open( self         : *SPI,
                  in_gpio      : *PiGPIO,
                  in_allocator : std.mem.Allocator,
-                 in_channel   : u32,
+                 in_channel   : u2,
                  in_bit_rate  : u32,
-                 in_flags     : u32 ) (SPIError||error{OutOfMemory})!void
+                 in_flags     : Flags ) (SPIError||error{OutOfMemory})!void
     {
-
-        log.debug( "Gpio: {?}", .{ self.gpio } );
-
         self.close(); // will do nothing if SPI not already open.
 
-        const ext = [1]Extent{ extentFrom( u32, &in_flags ) };
+        const ext = [_]Extent{ extentFrom( u32, @ptrCast( &in_flags ) ) };
 
-        self.spi  = try in_gpio.doCmd( .SPIO, true,
+        self.spi  = try in_gpio.doCmd( .spi_open, true,
                                        in_channel,
                                        in_bit_rate,
                                        &ext );
@@ -2036,13 +2094,13 @@ pub const SPI = struct
     // -------------------------------------------------------------------------
     //  Function: SPI.close
     // -------------------------------------------------------------------------
-    /// Close an open SPIO channel.
+    /// Close an open SPI channel.
 
     pub fn close( self : *SPI ) void
     {
         if (self.gpio) |gpio|
         {
-            _ = gpio.doCmd( .SPIC, true, self.spi, 0, null ) catch |err|
+            _ = gpio.doCmd( .spi_close, true, self.spi, 0, null ) catch |err|
             {
                 log.warn( "SPI Deinit error (ignored): {}", .{ err } );
             };
@@ -2066,7 +2124,7 @@ pub const SPI = struct
 
         if (self.gpio) |gpio|
         {
-            const result = try gpio.doCmd( .SPIR,
+            const result = try gpio.doCmd( .spi_read,
                                            false,
                                            self.spi,
                                            out_rx_slice.len,
@@ -2079,7 +2137,7 @@ pub const SPI = struct
             return result;
         }
 
-        return error.SPINotOpen;
+        return error.NotOpen;
     }
 
     // -------------------------------------------------------------------------
@@ -2095,15 +2153,15 @@ pub const SPI = struct
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
 
-        const ext = [1]Extent{ in_tx_slice };
+        const ext = [_]Extent{ in_tx_slice };
 
         if (self.gpio) |gpio|
         {
-            _ = try gpio.doCmd( .SPIW, true, self.spi,  0, &ext );
+            _ = try gpio.doCmd( .spi_write, true, self.spi,  0, &ext );
             return;
         }
 
-        return error.SPINotOpen;
+        return error.NotOpen;
     }
 
     // -------------------------------------------------------------------------
@@ -2113,18 +2171,19 @@ pub const SPI = struct
     /// to the receive buffer.
     ///
     /// The caller must assure that receive slice is the same size as
-    /// the transmit slice.  It is permissable for the receeive slice to point
+    /// the transmit slice.  It is permissable for the receive slice to point
     /// to the same memory as the transmit slice.
 
     pub fn transfer( self          : SPI,
                      in_tx_slice   : [] const u8,
                      out_rx_slice  : []u8 ) Error!void
     {
+        std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
 
-        const ext = [1]Extent{ in_tx_slice };
+        const ext = [_]Extent{ in_tx_slice };
 
-        _ = try self.gpio.doCmd( .SPIX, false, self.spi, 0, &ext );
+        _ = try self.gpio.doCmd( .spi_trasfer, false, self.spi, 0, &ext );
 
         defer self.gpio.unlockCmdMutex();
 
@@ -2132,18 +2191,499 @@ pub const SPI = struct
     }
 };
 
+// =============================================================================
+//  I2C Master Interface
+// =============================================================================
+
+pub const I2C = struct
+{
+    gpio      : ?*PiGPIO           = null,
+    i2c       : u32                = 0,
+    allocator : std.mem.Allocator  = undefined,
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.open
+    // -------------------------------------------------------------------------
+    /// Configure the selected channel for I2C master operation.
+    ///
+    /// Parameters:
+    /// - in_gpio      - the PiGPIO instance to use.
+    /// - in_allocator - an allocator to be use as needed.
+    /// - in_interface - the I2C interface to configure (0 or 1)
+    /// - in_address   - the slave address to communicate with.
+    ///
+    /// Note: it IS safe to call this function for an open I2C instance.  The
+    ///       instance will be reconfigured to the specified settings.
+
+    // ### TODO ### document SPI flag bits.
+
+    pub fn open( self         : *I2C,
+                 in_gpio      : *PiGPIO,
+                 in_allocator : std.mem.Allocator,
+                 in_interface : u1,
+                 in_address   : u7 ) (SPIError||error{OutOfMemory})!void
+    {
+        self.close(); // will do nothing if I2C not already open.
+
+        const zero : u32 = 0;
+        const ext = [_]Extent{ extentFrom( u32, &zero ) };
+
+        self.spi  = try in_gpio.doCmd( .i2c_open, true,
+                                       in_interface,
+                                       in_address,
+                                       &ext );
+        self.allocator = in_allocator;
+        self.gpio      = in_gpio;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.close
+    // -------------------------------------------------------------------------
+    /// Close an open I2C channel.
+
+    pub fn close( self : *I2C ) void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = gpio.doCmd( .i2c_close, true, self.i2c, 0, null ) catch |err|
+            {
+                log.warn( "I2C Deinit error (ignored): {}", .{ err } );
+            };
+
+            self.gpio = null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.readRaw
+    // -------------------------------------------------------------------------
+    /// This function reads raw data from the I2C bus into the receive
+    /// slice.
+
+    pub fn readRaw( self         : I2C,
+                    out_rx_slice : []u8 ) I2CError!u32
+    {
+        std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const result = try gpio.doCmd( .i2c_rx_raw,
+                                           false,
+                                           self.i2c,
+                                           out_rx_slice.len,
+                                           null );
+
+            defer self.gpio.unlockCmdMutex();
+
+            try gpio.cmd_stream.read( out_rx_slice );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeRaw
+    // -------------------------------------------------------------------------
+    /// This function transmits raw over an I2C bus.
+
+    pub fn writeRaw( self        : I2C,
+                     in_tx_slice : [] const u8 ) I2CError!void
+    {
+        std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
+
+        const ext = [_]Extent{ in_tx_slice };
+
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .i2c_tx_raw, true, self.i2c,  0, &ext );
+            return;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeQuick
+    // -------------------------------------------------------------------------
+    /// This sends just the address byte over the bus. The in_bit parameter's
+    /// value is used to set the address's Rd/Wr bit.  This allows that quick
+    /// transfer of a single bit of data to the slave
+
+    pub fn writeQuick( self         : I2C,
+                       in_bit       : u1 ) I2CError!void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .i2c_tx_quick, true, self.i2c, in_bit, null );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeByte
+    // -------------------------------------------------------------------------
+    /// This sends a single byte to the slave
+
+    pub fn writeByte( self         : I2C,
+                      in_byte      : u8 ) I2CError!void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .i2c_tx_raw_u8, true, self.i2c, in_byte, null );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.readByte
+    // -------------------------------------------------------------------------
+    /// This reads a single byte from the slave
+
+    pub fn readByte( self : I2C) I2CError!u8
+    {
+        if (self.gpio) |gpio|
+        {
+            return try gpio.doCmd( .i2c_rx_raw_u8, true, self.i2c, 0, null );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeByteData
+    // -------------------------------------------------------------------------
+    /// This sends a single byte to selected register on the slave
+
+    pub fn writeByteData( self         : I2C,
+                          in_register  : u8,
+                          in_byte      : u8 ) I2CError!void
+    {
+        if (self.gpio) |gpio|
+        {
+            const data : u32 = in_byte;
+            const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
+
+            _ = try gpio.doCmd( .i2c_tx_u8, true, self.i2c, in_register, ext );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.readByteData
+    // -------------------------------------------------------------------------
+    /// This reads a single byte from the slave
+
+    pub fn readByteData( self : I2C, in_register : u8 ) I2CError!u8
+    {
+        if (self.gpio) |gpio|
+        {
+            return try gpio.doCmd( .i2c_rx_u8, true, self.i2c, in_register, null );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeWordData
+    // -------------------------------------------------------------------------
+    /// This sends a 16-bit word to selected register on the slave
+
+    pub fn writeWordData( self         : I2C,
+                          in_register  : u8,
+                          in_word      : u16 ) I2CError!void
+    {
+        if (self.gpio) |gpio|
+        {
+            const data : u32 = in_word;
+            const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
+
+            _ = try gpio.doCmd( .i2c_tx_u16, true, self.i2c, in_register, ext );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.readWordData
+    // -------------------------------------------------------------------------
+    /// This reads a bit word from the slave
+
+    pub fn readWordData( self : I2C, in_register : u8 ) I2CError!u16
+    {
+        if (self.gpio) |gpio|
+        {
+            return try gpio.doCmd( .i2c_rx_u16, true, self.i2c, in_register, null );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeBlockData
+    // -------------------------------------------------------------------------
+    /// This sends a block of data to the selected register on the slave
+
+    pub fn writeBlockData( self         : I2C,
+                           in_register  : u8,
+                           in_tx_slice  : [] const u8 ) I2CError!void
+    {
+        std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const len : u32 = @intCast( in_tx_slice.len );
+            const ext = [_]Extent{ in_tx_slice( u32, &len.ptr ), in_tx_slice };
+
+            _ = try gpio.doCmd( .i2c_tx_block,
+                                false,
+                                self.i2c,
+                                in_register,
+                                ext );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.readBlockData
+    // -------------------------------------------------------------------------
+    /// This reads a block of data from the selected register on the slave
+
+    pub fn readBlockData( self         : I2C,
+                          in_register  : u8,
+                          out_rx_slice : []u8 ) I2CError!void
+    {
+        std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
+
+        const ext = [_]Extent{ out_rx_slice };
+
+        if (self.gpio) |gpio|
+        {
+            const result =  try gpio.doCmd( .i2c_rx_block,
+                                            false,
+                                            self.i2c,
+                                            in_register,
+                                            ext );
+
+            defer self.gpio.unlockCmdMutex();
+
+            try gpio.cmd_stream.read( out_rx_slice );
+
+            return @intCast( result & 0xFF );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.writeI2CBlockData
+    // -------------------------------------------------------------------------
+    /// This sends a block of data to the selected register on the slave
+
+    pub fn writeI2CBlockData( self         : I2C,
+                              in_register  : u8,
+                              in_tx_slice  : [] const u8 ) I2CError!void
+    {
+        std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const len : u32 = @intCast( in_tx_slice.len );
+            const ext = [_]Extent{ extentFrom( u32, &len.ptr ), in_tx_slice };
+
+            _ = try gpio.doCmd( .i2c_tx_i2c_blk,
+                                false,
+                                self.i2c,
+                                in_register,
+                                ext );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.readI2CBlockData
+    // -------------------------------------------------------------------------
+    /// This reads a block of data from the selected register on the slave
+
+    pub fn readI2CBlockData( self         : I2C,
+                             in_register  : u8,
+                             out_rx_slice : []u8 ) I2CError!void
+    {
+        std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const result =  try gpio.doCmd( .i2c_rx_i2c_blk,
+                                            false,
+                                            self.i2c,
+                                            in_register,
+                                            null );
+
+            defer self.gpio.unlockCmdMutex();
+
+            try gpio.cmd_stream.read( out_rx_slice );
+
+            return @intCast( result & 0xFF );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.procedureCall
+    // -------------------------------------------------------------------------
+    /// This reads a block of data from the selected register on the slave
+
+    pub fn procedureCall( self         : I2C,
+                          in_register  : u7,
+                          in_tx_slice   : [] const u8,
+                          out_rx_slice  : []u8 ) I2CError!void
+    {
+        std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
+        std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
+
+        if (self.gpio) |gpio|
+        {
+            const len : u32 = @intCast( in_tx_slice.len );
+            const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
+
+
+            const result =  try gpio.doCmd( .i2c_proc_call,
+                                            false,
+                                            self.i2c,
+                                            in_register,
+                                            ext );
+
+            defer self.gpio.unlockCmdMutex();
+
+            try gpio.cmd_stream.read( out_rx_slice );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Function: I2C.zip
+    // -------------------------------------------------------------------------
+    /// This function executes a sequence of I2C operations. The operations to
+    /// be performed are specified by the contents of in_operations which
+    /// contains the concatenated command codes and associated data.
+    ///
+    pub fn zip( self          : I2C,
+                in_register   : u7,
+                in_operations : [] const u8,
+                out_rx_slice  : []u8 ) I2CError!u32
+    {
+        std.debug.assert( in_operations.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const len : u32 = @intCast( in_operations.len );
+            const ext = [_]Extent{ extentFrom( u32, &len.ptr ), in_operations };
+
+
+            const result =  try gpio.doCmd( .i2c_zip,
+                                            false,
+                                            self.i2c,
+                                            in_register,
+                                            ext );
+
+            defer self.gpio.unlockCmdMutex();
+
+            try gpio.cmd_stream.read( out_rx_slice );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+};
 
 // =============================================================================
 //  Testing
 // =============================================================================
 
-// const testing = std.testing;
+const testing = std.testing;
 
-// test "create gpio"
+test "Connection"
+{
+    var gpio : PiGPIO = .{};
+
+    // -- Check for some common failures ---
+
+    try testing.expectError( error.UnknownHostName,
+                             gpio.connect( testing.allocator,
+                                           "now.where",
+                                           null ) );
+
+    try testing.expectError( error.ConnectionRefused,
+                             gpio.connect( testing.allocator,
+                                           "localhost",
+                                           31416 ) );
+
+    // --- check for connect (and ipv6 address parsing) ---
+
+    try gpio.connect( testing.allocator, "::", 8888 );
+    defer gpio.disconnect();
+
+    std.log.warn("\nTick: {!}", .{ gpio.getCurrentTick() });
+    std.log.warn("\nHVer: {!X}", .{ gpio.getHardwareVersion() });
+    std.log.warn("\nGVer: {!}", .{ gpio.getPiGPIOVersion() });
+}
+
+test "custom command"
+{
+    var gpio : PiGPIO = .{};
+
+    try gpio.connect( testing.allocator, "::", 8888 );
+    defer gpio.disconnect();
+
+    try testing.expect( try gpio.custom1( 1, 2, "three" ) == 116 );
+
+    var reply : [3]u8 = undefined;
+    try testing.expect( try gpio.custom2( 1, "two", &reply ) == 3 );
+    try testing.expectEqualStrings(  &reply, "owt" );
+}
+
+test "basic pin test"
+{
+  var gpio : PiGPIO = .{};
+
+  try gpio.connect( testing.allocator, null, null );
+  defer gpio.disconnect();
+
+  const test_pin  = gpio.pin(  6 );
+
+  try test_pin.setMode( .input );
+  try test_pin.setPull( .up );
+  std.time.sleep( 100_000 );
+  try testing.expect( try test_pin.get() == true );
+  try test_pin.setPull( .down );
+  std.time.sleep( 100_000 );
+  try testing.expect( try test_pin.get() == false );
+  try test_pin.setPull( .none );
+
+  try test_pin.setMode( .output );
+  try test_pin.setLow();
+  std.time.sleep( 1_000_000_000 );
+  try test_pin.set( true );
+  std.time.sleep( 1_000_000_000 );
+  try test_pin.set( false );
+  std.time.sleep( 1_000_000_000 );
+  try test_pin.setHigh();
+}
+
+// -----------------------------------------------------------------------------
+
+// test "Send SPI"
 // {
-//   try testing.expect( connect( null, null ) == .ok );
 
-//   defer disconnect();
-
-//   try testing.expect( gpio.pi > 0 );
 // }
