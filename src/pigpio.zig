@@ -2236,7 +2236,7 @@ pub const I2C = struct
         const zero : u32 = 0;
         const ext = [_]Extent{ extentFrom( u32, &zero ) };
 
-        self.spi  = try in_gpio.doCmd( .i2c_open, true,
+        self.i2c  = try in_gpio.doCmd( .i2c_open, true,
                                        in_interface,
                                        in_address,
                                        &ext );
@@ -2278,12 +2278,12 @@ pub const I2C = struct
             const result = try gpio.doCmd( .i2c_rx_raw,
                                            false,
                                            self.i2c,
-                                           out_rx_slice.len,
+                                           @intCast( out_rx_slice.len ),
                                            null );
 
             defer gpio.cmd_mutex.unlock();
 
-            try gpio.cmd_stream.read( out_rx_slice );
+            _ = try gpio.cmd_stream.read( out_rx_slice );
 
             return result;
         }
@@ -2355,7 +2355,11 @@ pub const I2C = struct
     {
         if (self.gpio) |gpio|
         {
-            return try gpio.doCmd( .i2c_rx_raw_u8, true, self.i2c, 0, null );
+            return @intCast( try gpio.doCmd( .i2c_rx_raw_u8,
+                                             true,
+                                             self.i2c,
+                                             0,
+                                             null ) & 0xFF );
         }
 
         return error.NotOpen;
@@ -2375,7 +2379,7 @@ pub const I2C = struct
             const data : u32 = in_byte;
             const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
 
-            _ = try gpio.doCmd( .i2c_tx_u8, true, self.i2c, in_register, ext );
+            _ = try gpio.doCmd( .i2c_tx_u8, true, self.i2c, in_register, &ext );
         }
 
         return error.NotOpen;
@@ -2390,7 +2394,11 @@ pub const I2C = struct
     {
         if (self.gpio) |gpio|
         {
-            return try gpio.doCmd( .i2c_rx_u8, true, self.i2c, in_register, null );
+            return @intCast( try gpio.doCmd( .i2c_rx_u8,
+                                             true,
+                                             self.i2c,
+                                             in_register,
+                                             null ) & 0xFF );
         }
 
         return error.NotOpen;
@@ -2410,7 +2418,7 @@ pub const I2C = struct
             const data : u32 = in_word;
             const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
 
-            _ = try gpio.doCmd( .i2c_tx_u16, true, self.i2c, in_register, ext );
+            _ = try gpio.doCmd( .i2c_tx_u16, true, self.i2c, in_register, &ext );
         }
 
         return error.NotOpen;
@@ -2425,7 +2433,11 @@ pub const I2C = struct
     {
         if (self.gpio) |gpio|
         {
-            return try gpio.doCmd( .i2c_rx_u16, true, self.i2c, in_register, null );
+            return @intCast( try gpio.doCmd( .i2c_rx_u16,
+                                             true,
+                                             self.i2c,
+                                             in_register,
+                                             null ) & 0xFFFF );
         }
 
         return error.NotOpen;
@@ -2445,13 +2457,13 @@ pub const I2C = struct
         if (self.gpio) |gpio|
         {
             const len : u32 = @intCast( in_tx_slice.len );
-            const ext = [_]Extent{ in_tx_slice( u32, &len.ptr ), in_tx_slice };
+            const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
 
             _ = try gpio.doCmd( .i2c_tx_block,
                                 false,
                                 self.i2c,
                                 in_register,
-                                ext );
+                                &ext );
         }
 
         return error.NotOpen;
@@ -2464,7 +2476,7 @@ pub const I2C = struct
 
     pub fn readBlockData( self         : I2C,
                           in_register  : u8,
-                          out_rx_slice : []u8 ) I2CError!void
+                          out_rx_slice : []u8 ) I2CError!u32
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
@@ -2476,11 +2488,11 @@ pub const I2C = struct
                                             false,
                                             self.i2c,
                                             in_register,
-                                            ext );
+                                            &ext );
 
             defer gpio.cmd_mutex.unlock();
 
-            try gpio.cmd_stream.read( out_rx_slice );
+            _ = try gpio.cmd_stream.read( out_rx_slice );
 
             return @intCast( result & 0xFF );
         }
@@ -2502,13 +2514,13 @@ pub const I2C = struct
         if (self.gpio) |gpio|
         {
             const len : u32 = @intCast( in_tx_slice.len );
-            const ext = [_]Extent{ extentFrom( u32, &len.ptr ), in_tx_slice };
+            const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
 
             _ = try gpio.doCmd( .i2c_tx_i2c_blk,
                                 false,
                                 self.i2c,
                                 in_register,
-                                ext );
+                                &ext );
         }
 
         return error.NotOpen;
@@ -2521,7 +2533,7 @@ pub const I2C = struct
 
     pub fn readI2CBlockData( self         : I2C,
                              in_register  : u8,
-                             out_rx_slice : []u8 ) I2CError!void
+                             out_rx_slice : []u8 ) I2CError!u32
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
@@ -2535,7 +2547,7 @@ pub const I2C = struct
 
             defer gpio.cmd_mutex.unlock();
 
-            try gpio.cmd_stream.read( out_rx_slice );
+            _ = try gpio.cmd_stream.read( out_rx_slice );
 
             return @intCast( result & 0xFF );
         }
@@ -2551,7 +2563,7 @@ pub const I2C = struct
     pub fn procedureCall( self         : I2C,
                           in_register  : u7,
                           in_tx_slice   : [] const u8,
-                          out_rx_slice  : []u8 ) I2CError!void
+                          out_rx_slice  : []u8 ) I2CError!u32
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
@@ -2566,11 +2578,11 @@ pub const I2C = struct
                                             false,
                                             self.i2c,
                                             in_register,
-                                            ext );
+                                            &ext );
 
             defer gpio.cmd_mutex.unlock();
 
-            try gpio.cmd_stream.read( out_rx_slice );
+            _ = try gpio.cmd_stream.read( out_rx_slice );
 
             return result;
         }
@@ -2595,18 +2607,18 @@ pub const I2C = struct
         if (self.gpio) |gpio|
         {
             const len : u32 = @intCast( in_operations.len );
-            const ext = [_]Extent{ extentFrom( u32, &len.ptr ), in_operations };
+            const ext = [_]Extent{ extentFrom( u32, &len ), in_operations };
 
 
             const result =  try gpio.doCmd( .i2c_zip,
                                             false,
                                             self.i2c,
                                             in_register,
-                                            ext );
+                                            &ext );
 
             defer gpio.cmd_mutex.unlock();
 
-            try gpio.cmd_stream.read( out_rx_slice );
+            _ = try gpio.cmd_stream.read( out_rx_slice );
 
             return result;
         }
@@ -2746,4 +2758,42 @@ test "SPI"
     try spi.read( &buffer );
     try spi.write( &buffer );
     try spi.transfer( &buffer, &buffer );
+}
+
+// -----------------------------------------------------------------------------
+
+test "I2C"
+{
+    var gpio : PiGPIO     = .{};
+    var i2c  : PiGPIO.I2C = .{};
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try i2c.open( &gpio, testing.allocator, 0, 0x42 );
+    defer i2c.close();
+
+    var  buffer : [32]u8 = .{ 0 } ** 32;
+
+    try i2c.writeRaw( &buffer );
+    _ = try i2c.readRaw( &buffer );
+
+    try i2c.writeQuick( 0x01 );
+
+    try i2c.writeByte( 0xCD );
+    _ = try i2c.readByte();
+
+    try i2c.writeByteData( 1, 0xCD );
+    _ = try i2c.readByteData( 1 );
+
+    try i2c.writeWordData( 1, 0xABCD );
+    _ = try i2c.readWordData( 1 );
+
+    try i2c.writeBlockData( 1, &buffer );
+    _ = try i2c.readBlockData( 1, &buffer );
+
+    try i2c.writeI2CBlockData( 1, &buffer );
+    _ = try i2c.readI2CBlockData( 1, &buffer );
+
+    _ = try i2c.procedureCall( 1, &buffer, &buffer );
 }
