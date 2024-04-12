@@ -8,13 +8,30 @@ interface, but is written entirely in zig.  The missing capabilities are
 functions that pigpiod implements directly on the client, and that Zig
 provides native function for.~~
 
-The above paragraph represents the goal, not the reality.  For now the Pin
-and SPI functions mostly work. I'm adding more as I get time or
-need them for other projects.   If the current version does not support
-something you need, send a message via
+The above paragraph represents the goal, not the reality.
+
+Currently working:
+
+- Pin set value, direction, pull up and down
+- Pin block get, set and clear
+- Pin level change callback
+- Event callback
+- SPI master communications
+- Get tick
+- Get hardware version
+- Get pigpiod version
+
+Present but not well tested
+
+- Pin PWM functions
+- Pin Servo functions
+- Pin glitch and noise filters
+- I2C master communications
+- Serial interface (hardware and bit-bang)
+- Scripting commands
+
+If the current version does not support something you need, send a message via
 [the Curuvar contact page](https://curuvar.com/contact?to=support).
-
-
 
 
 ## A note on formatting

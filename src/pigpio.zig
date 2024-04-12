@@ -414,14 +414,14 @@ const Command = enum(u8)
     WVSP   = 35,
     WVSC   = 36,
     pin_trigger     =  37,
-    PROC   = 38,
-    PROCD  = 39,
-    PROCR  = 40,
-    PROCS  = 41,
-    SLRO   = 42,
-    SLR    = 43,
-    SLRC   = 44,
-    PROCP  = 45,
+    store_script    =  38,
+    delete_script   =  39,
+    run_script      =  40,
+    stop_script     =  41,
+    bbser_open      =  42,
+    bbser_read      =  43,
+    bbser_close     =  44,
+    script_status   =  45,
     MICS   = 46,
     MILS   = 47,
     PARSE  = 48,
@@ -447,7 +447,7 @@ const Command = enum(u8)
     i2c_rx_i2c_blk  =  67,
     i2c_tx_i2c_blk  =  68,
     i2c_proc_call   =  69,
-    i2c_zip         =  70,
+    i2c_block_call  =  70,
 
     spi_open        =  71,
     spi_close       =  72,
@@ -455,13 +455,13 @@ const Command = enum(u8)
     spi_write       =  74,
     spi_trasfer     =  75,
 
-    SERO   = 76,
-    SERC   = 77,
-    SERRB  = 78,
-    SERWB  = 79,
-    SERR   = 80,
-    SERW   = 81,
-    SERDA  = 82,
+    ser_open        =  76,
+    ser_close       =  77,
+    ser_read_byte   =  78,
+    ser_write_byte  =  79,
+    ser_read        =  80,
+    ser_write       =  81,
+    ser_data_avail  =  82,
 
     pwm_duty_get    =  83,
     servo_get       =  84,
@@ -476,11 +476,11 @@ const Command = enum(u8)
     BI2CO  = 90,
     BI2CZ  = 91,
 
-    I2CZ   = 92,
+    i2c_zip         =  92,
 
     WVCHA  = 93,
 
-    SLRI   = 94,
+    bbser_invert    =  94,
 
     CGI    = 95,
     CSI    = 96,
@@ -514,7 +514,7 @@ const Command = enum(u8)
     events_bits_set = 115,
     trigger_event   = 116,
 
-    PROCU  = 117,
+    update_script   = 117,
     WVCAP  = 118,
 };
 
@@ -962,15 +962,15 @@ pub fn custom2( self    : *PiGPIO,
 }
 
 // -----------------------------------------------------------------------------
-// Function: addEventCallback
+// Public Function: addEventCallback
 // -----------------------------------------------------------------------------
 /// Set a callback function that will be called if the pin's state
 /// changes.
 
-fn addEventCallback( self       : *PiGPIO,
-                     in_event   : u5,
-                     in_func    : EventCBFunc,
-                     in_context : ?*anyopaque )!void
+pub fn addEventCallback( self       : *PiGPIO,
+                         in_event   : u5,
+                         in_func    : EventCBFunc,
+                         in_context : ?*anyopaque )!void
 {
     const cb = try self.allocator.create( EventCallback );
     errdefer self.allocator.destroy( cb );
@@ -1001,15 +1001,15 @@ fn addEventCallback( self       : *PiGPIO,
 }
 
 // -----------------------------------------------------------------------------
-// Function: removeEventCallback
+// Public Function: removeEventCallback
 // -----------------------------------------------------------------------------
 /// Set a callback function that will be called if the pin's state
 /// changes.
 
-fn removeEventCallback( self       : *PiGPIO,
-                        in_event   : u5,
-                        in_func    : EventCBFunc,
-                        in_context : ?*anyopaque ) void
+pub fn removeEventCallback( self       : *PiGPIO,
+                            in_event   : u5,
+                            in_func    : EventCBFunc,
+                            in_context : ?*anyopaque ) void
 {
     self.list_mutex.lock();
     defer self.list_mutex.unlock();
@@ -1056,6 +1056,102 @@ pub fn triggerEvent( self : *PiGPIO, in_event : u5 ) Error!void
 {
     _ = try self.doCmd( .trigger_event, true, in_event, 0, null );
 }
+
+// -----------------------------------------------------------------------------
+//  Public function: storeScript
+// -----------------------------------------------------------------------------
+/// Store a pigpio script to the server.
+
+pub fn storeScript( self      : *PiGPIO,
+                    in_script : [] const u8 ) Error!u32
+{
+    std.debug.assert( in_script.len <= 0xFFFF_FFFF );
+
+    const ext = [_]Extent{ in_script };
+
+    return try self.doCmd( .store_script, true, 0, 0, ext );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: deleteScript
+// -----------------------------------------------------------------------------
+/// Delete a pigpio script to the server.
+
+pub fn deleteScript( self      : *PiGPIO,
+                    in_script : u32 ) Error!void
+{
+    _ = try self.doCmd( .delete_script, true, in_script, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: runScript
+// -----------------------------------------------------------------------------
+/// run a pigpio script to the server.
+
+pub fn runScript( self      : *PiGPIO,
+                  in_script : u32,
+                  in_params : [] const u32 ) Error!void
+{
+    std.debug.assert( in_params.len <= 10 );
+
+    const param : *u8 = @ptrCast( in_params.ptr );
+
+    const ext = [_]Extent{ param[0..4*in_params.len] };
+
+    _ = try self.doCmd( .run_script, true, in_script, 0, &ext );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: updateScript
+// -----------------------------------------------------------------------------
+/// Update a pigpio script's status.
+
+pub fn updateScript( self      : *PiGPIO,
+                     in_script : u32,
+                     in_params : [] const u32 ) Error!void
+{
+    std.debug.assert( in_params.len <= 10 );
+
+    const param : *u8 = @ptrCast( in_params.ptr );
+
+    const ext = [_]Extent{ param[0..4*in_params.len] };
+
+    _ = try self.doCmd( .update_script, true, in_script, 0, &ext );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: stopScript
+// -----------------------------------------------------------------------------
+/// Delete a pigpio script to the server.
+
+pub fn stopScript( self      : *PiGPIO,
+                    in_script : u32 ) Error!void
+{
+    _ = try self.doCmd( .stop_script, true, in_script, 0, null );
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: scriptStatus
+// -----------------------------------------------------------------------------
+/// Delete a pigpio script to the server.
+
+pub fn scriptStatus( self       : *PiGPIO,
+                     in_script  : u32,
+                     out_params : []u32 ) Error!u32
+{
+    std.debug.assert( out_params.len <= 10 );
+
+    const result = try self.doCmd( .script_status, false, in_script, 0, null );
+
+    const param : *u8 = @ptrCast( out_params.ptr );
+
+    defer self.cmd_mutex.unlock();
+
+    _ = try self.cmd_stream.read( param[0..4*out_params.len] );
+
+    return result;
+}
+
 
 // =============================================================================
 //  Private Functions
@@ -1378,7 +1474,6 @@ fn notifyThread( self : *PiGPIO ) void
 
     runloop: while(   self.level_cb_first != null
                   or self.event_cb_first != null)
-
     {
         var pollfd = [_]std.posix.pollfd{ .{ .fd     = notify_stream.handle,
                                             .events  = std.posix.POLL.IN,
@@ -1663,7 +1758,7 @@ pub const Pin = struct
     pin   : u6,
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setHigh
+    //  Public Function: Pin.setHigh
     // -------------------------------------------------------------------------
     ///  Set the pin output to the high state.
     ///
@@ -1675,7 +1770,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setLow
+    //  Public Function: Pin.setLow
     // -------------------------------------------------------------------------
     ///  Set the pin output to the low state.
     ///
@@ -1687,7 +1782,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.set
+    //  Public Function: Pin.set
     // -------------------------------------------------------------------------
     ///  Set the pin output state based on boolean parameter.
     ///
@@ -1703,7 +1798,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.get
+    //  Public Function: Pin.get
     // -------------------------------------------------------------------------
     ///  Get the logic state of a pin.
 
@@ -1713,7 +1808,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.trigger
+    //  Public Function: Pin.trigger
     // -------------------------------------------------------------------------
     ///  trigger a pulse on the gpio pin.
     ///
@@ -1736,7 +1831,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setMode
+    //  Public Function: Pin.setMode
     // -------------------------------------------------------------------------
     /// Set the pin mode.
 
@@ -1750,7 +1845,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getMode
+    //  Public Function: Pin.getMode
     // -------------------------------------------------------------------------
     /// Get the current pin mode.
 
@@ -1762,7 +1857,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setPull
+    //  Public Function: Pin.setPull
     // -------------------------------------------------------------------------
     /// Set the pin pull resistor state.
 
@@ -1776,7 +1871,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setPadStrength
+    //  Public Function: Pin.setPadStrength
     // -------------------------------------------------------------------------
     /// Set the pin's drive strength.
 
@@ -1786,7 +1881,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getPadStrength
+    //  Public Function: Pin.getPadStrength
     // -------------------------------------------------------------------------
     /// Get the pin's drive strength.
 
@@ -1796,7 +1891,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setGlitchFilter
+    //  Public Function: Pin.setGlitchFilter
     // -------------------------------------------------------------------------
     /// Set the glitch filter value for the pin.
     ///
@@ -1812,7 +1907,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setNoiseFilter
+    //  Public Function: Pin.setNoiseFilter
     // -------------------------------------------------------------------------
     /// Set the noise filter value for the pin.
     ///
@@ -1838,7 +1933,7 @@ pub const Pin = struct
     // ==== PWM Functions ======================================================
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setPWMFrequency
+    //  Public Function: Pin.setPWMFrequency
     // -------------------------------------------------------------------------
     /// Set the PWM frequency.
 
@@ -1852,7 +1947,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getPWMFrequency
+    //  Public Function: Pin.getPWMFrequency
     // -------------------------------------------------------------------------
     /// Get the currently set PWM frequency in Hz.
 
@@ -1862,7 +1957,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setPWMRange
+    //  Public Function: Pin.setPWMRange
     // -------------------------------------------------------------------------
     /// Set the PWM range.  The range is the number that indicates a 100%
     /// duty cycle when pass the the setPWMDutyCycle function.
@@ -1873,7 +1968,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getPWMRange
+    //  Public Function: Pin.getPWMRange
     // -------------------------------------------------------------------------
     /// Get the currently set PWM range.
 
@@ -1883,7 +1978,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getPWMRealRange
+    //  Public Function: Pin.getPWMRealRange
     // -------------------------------------------------------------------------
     /// Get the currently set PWM range.
 
@@ -1893,7 +1988,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setPWMDutyCycle
+    //  Public Function: Pin.setPWMDutyCycle
     // -------------------------------------------------------------------------
     /// Set the PWM duty cycle.  A value of 0 indicates a 0% duty cycle, and
     /// a value that matches the currenlty set range (default: 255) indicates
@@ -1905,7 +2000,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getPWMDutyCycle
+    //  Public Function: Pin.getPWMDutyCycle
     // -------------------------------------------------------------------------
     /// Get the currently set PWM duty cycle value.
 
@@ -1915,7 +2010,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setPWMDutyFractiom
+    //  Public Function: Pin.setPWMDutyFractiom
     // -------------------------------------------------------------------------
     /// Sets the duty cycle based on a fraction that must be between 0 and
     /// 1 (inclusive).
@@ -1934,7 +2029,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getPWMDutyFractiom
+    //  Public Function: Pin.getPWMDutyFractiom
     // -------------------------------------------------------------------------
     /// Gets the duty cycle as a fraction that must be between 0 and
     /// 1 (inclusive).
@@ -1950,7 +2045,7 @@ pub const Pin = struct
     // ==== Servo Functions ====================================================
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setServoPulseWidth
+    //  Public Function: Pin.setServoPulseWidth
     // -------------------------------------------------------------------------
     /// Set the servo pulse width.
     ///
@@ -1967,7 +2062,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.getServoPulseWidth
+    //  Public Function: Pin.getServoPulseWidth
     // -------------------------------------------------------------------------
     /// Get the current servo pulse width value.
 
@@ -1979,7 +2074,7 @@ pub const Pin = struct
     // ==== Pin Callback Setup =================================================
 
     // -------------------------------------------------------------------------
-    // Function: Pin.addLevelCallback
+    // Public Function: Pin.addLevelCallback
     // -------------------------------------------------------------------------
     /// Set a callback function that will be called if the pin's state
     /// changes.
@@ -2003,7 +2098,7 @@ pub const Pin = struct
     }
 
    // -------------------------------------------------------------------------
-    // Function: Pin.remove callback
+    // Public Function: Pin.remove callback
     // -------------------------------------------------------------------------
     /// Set a callback function that will be called if the pin's state
     /// changes.
@@ -2022,7 +2117,7 @@ pub const Pin = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: Pin.setWatchdog
+    //  Public Function: Pin.setWatchdog
     // -------------------------------------------------------------------------
     ///  Set a watchdog timeout on a pine.
 
@@ -2077,7 +2172,7 @@ pub const SPI = struct
     };
 
     // -------------------------------------------------------------------------
-    //  Function: SPI.open
+    //  Public Function: SPI.open
     // -------------------------------------------------------------------------
     /// Configure the selected channel for SPI master operation.
     ///
@@ -2127,7 +2222,8 @@ pub const SPI = struct
 
         const ext = [_]Extent{ extentFrom( u32, @ptrCast( &in_flags ) ) };
 
-        self.spi  = try in_gpio.doCmd( .spi_open, true,
+        self.spi  = try in_gpio.doCmd( .spi_open,
+                                       true,
                                        in_channel,
                                        in_bit_rate,
                                        &ext );
@@ -2136,7 +2232,7 @@ pub const SPI = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: SPI.close
+    //  Public Function: SPI.close
     // -------------------------------------------------------------------------
     /// Close an open SPI channel.
 
@@ -2154,7 +2250,7 @@ pub const SPI = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: SPI.read
+    //  Public Function: SPI.read
     // -------------------------------------------------------------------------
     /// This function reads data from the SPI interface into the receive
     /// slice.
@@ -2185,7 +2281,7 @@ pub const SPI = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: SPI.write
+    //  Public Function: SPI.write
     // -------------------------------------------------------------------------
     /// This function transmits data over an SPI interface.  It attempts
     /// to transmit all the data in the transmit slice.
@@ -2210,7 +2306,7 @@ pub const SPI = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: SPI.transfer
+    //  Public Function: SPI.transfer
     // -------------------------------------------------------------------------
     /// This function sends the slice transmit slice and simultaniously reads
     /// to the receive buffer.
@@ -2254,7 +2350,7 @@ pub const I2C = struct
     allocator : std.mem.Allocator  = undefined,
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.open
+    //  Public Function: I2C.open
     // -------------------------------------------------------------------------
     /// Configure the selected channel for I2C master operation.
     ///
@@ -2289,7 +2385,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.close
+    //  Public Function: I2C.close
     // -------------------------------------------------------------------------
     /// Close an open I2C channel.
 
@@ -2307,7 +2403,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.readRaw
+    //  Public Function: I2C.readRaw
     // -------------------------------------------------------------------------
     /// This function reads raw data from the I2C bus into the receive
     /// slice.
@@ -2336,7 +2432,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeRaw
+    //  Public Function: I2C.writeRaw
     // -------------------------------------------------------------------------
     /// This function transmits raw over an I2C bus.
 
@@ -2357,7 +2453,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeQuick
+    //  Public Function: I2C.writeQuick
     // -------------------------------------------------------------------------
     /// This sends just the address byte over the bus. The in_bit parameter's
     /// value is used to set the address's Rd/Wr bit.  This allows that quick
@@ -2375,7 +2471,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeByte
+    //  Public Function: I2C.writeByte
     // -------------------------------------------------------------------------
     /// This sends a single byte to the slave
 
@@ -2391,7 +2487,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.readByte
+    //  Public Function: I2C.readByte
     // -------------------------------------------------------------------------
     /// This reads a single byte from the slave
 
@@ -2410,7 +2506,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeByteData
+    //  Public Function: I2C.writeByteData
     // -------------------------------------------------------------------------
     /// This sends a single byte to selected register on the slave
 
@@ -2430,7 +2526,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.readByteData
+    //  Public Function: I2C.readByteData
     // -------------------------------------------------------------------------
     /// This reads a single byte from the slave
 
@@ -2449,7 +2545,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeWordData
+    //  Public Function: I2C.writeWordData
     // -------------------------------------------------------------------------
     /// This sends a 16-bit word to selected register on the slave
 
@@ -2469,7 +2565,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.readWordData
+    //  Public Function: I2C.readWordData
     // -------------------------------------------------------------------------
     /// This reads a bit word from the slave
 
@@ -2488,7 +2584,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeBlockData
+    //  Public Function: I2C.writeBlockData
     // -------------------------------------------------------------------------
     /// This sends a block of data to the selected register on the slave
 
@@ -2514,7 +2610,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.readBlockData
+    //  Public Function: I2C.readBlockData
     // -------------------------------------------------------------------------
     /// This reads a block of data from the selected register on the slave
 
@@ -2545,7 +2641,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.writeI2CBlockData
+    //  Public Function: I2C.writeI2CBlockData
     // -------------------------------------------------------------------------
     /// This sends a block of data to the selected register on the slave
 
@@ -2571,7 +2667,7 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.readI2CBlockData
+    //  Public Function: I2C.readI2CBlockData
     // -------------------------------------------------------------------------
     /// This reads a block of data from the selected register on the slave
 
@@ -2600,14 +2696,39 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.procedureCall
+    //  Public Function: I2C.procedureCall
     // -------------------------------------------------------------------------
-    /// This reads a block of data from the selected register on the slave
+    /// This sends a value to a register then reads the regiser back
 
     pub fn procedureCall( self         : I2C,
                           in_register  : u7,
-                          in_tx_slice   : [] const u8,
-                          out_rx_slice  : []u8 ) I2CError!u32
+                          in_value     : u16 ) I2CError!u32
+    {
+        if (self.gpio) |gpio|
+        {
+            const ext = [_]Extent{ extentFrom( u16, &in_value ) };
+
+
+            return try gpio.doCmd( .i2c_proc_call,
+                                   true,
+                                   self.i2c,
+                                   in_register,
+                                   &ext );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: I2C.blockProcedureCall
+    // -------------------------------------------------------------------------
+    /// This sends a block of data from the selected register and reads a
+    /// block back.
+
+    pub fn blockProcedureCall( self         : I2C,
+                               in_register  : u7,
+                               in_tx_slice   : [] const u8,
+                               out_rx_slice  : []u8 ) I2CError!u32
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
@@ -2618,7 +2739,7 @@ pub const I2C = struct
             const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
 
 
-            const result =  try gpio.doCmd( .i2c_proc_call,
+            const result =  try gpio.doCmd( .i2c_block_call,
                                             false,
                                             self.i2c,
                                             in_register,
@@ -2635,12 +2756,12 @@ pub const I2C = struct
     }
 
     // -------------------------------------------------------------------------
-    //  Function: I2C.zip
+    //  Public Function: I2C.zip
     // -------------------------------------------------------------------------
     /// This function executes a sequence of I2C operations. The operations to
     /// be performed are specified by the contents of in_operations which
     /// contains the concatenated command codes and associated data.
-    ///
+
     pub fn zip( self          : I2C,
                 in_register   : u7,
                 in_operations : [] const u8,
@@ -2665,6 +2786,303 @@ pub const I2C = struct
             _ = try gpio.cmd_stream.read( out_rx_slice );
 
             return result;
+        }
+
+        return error.NotOpen;
+    }
+};
+
+// =============================================================================
+//  Serial Interface
+// =============================================================================
+
+pub const Serial = struct
+{
+    gpio      : ?*PiGPIO           = null,
+    serial    : u32                = 0,
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.open
+    // -------------------------------------------------------------------------
+    /// Configure the selected channel for serial.
+    ///
+    /// Parameters:
+    /// - in_gpio
+    /// - in_interface - the serial interface path name (e.g. "/dev/ttyUSB0")
+    /// - in_bit-rate - the transmission speed in bits per second.
+    /// - in_flags - currently unused (set to 0)
+    ///
+    /// The valid bit rates are:  50, 75, 110, 134, 150, 200, 300, 600, 1200,
+    /// 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200, or 230400.
+
+    pub fn open( self         : *Serial,
+                 in_gpio      : *PiGPIO,
+                 in_interface : [] const u8,
+                 in_bit_rate  : u32,
+                 in_flags     : u32 ) !void
+    {
+        std.debug.assert(     in_bit_rate ==      50
+                          or  in_bit_rate ==      75
+                          or  in_bit_rate ==     110
+                          or  in_bit_rate ==     134
+                          or  in_bit_rate ==     150
+                          or  in_bit_rate ==     200
+                          or  in_bit_rate ==     300
+                          or  in_bit_rate ==     600
+                          or  in_bit_rate ==   1_200
+                          or  in_bit_rate ==   2_400
+                          or  in_bit_rate ==   4_800
+                          or  in_bit_rate ==   9_600
+                          or  in_bit_rate ==  19_200
+                          or  in_bit_rate ==  38_400
+                          or  in_bit_rate ==  57_600
+                          or  in_bit_rate == 115_200
+                          or  in_bit_rate == 230_400 );
+
+        self.close();
+
+        const ext = [_]Extent{ in_interface };
+
+        self.serial = try in_gpio.doCmd( .ser_open,
+                                         true,
+                                         in_bit_rate,
+                                         in_flags,
+                                         &ext );
+
+        self.gpio      = in_gpio;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.close
+    // -------------------------------------------------------------------------
+
+    pub fn close( self : *Serial ) void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = gpio.doCmd( .ser_close, true, self.serial, 0, null ) catch |err|
+            {
+                log.warn( "Serial close error (ignored): {}", .{ err } );
+            };
+
+            self.gpio = null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.readByte
+    // -------------------------------------------------------------------------
+
+    pub fn readByte( self : *Serial ) !u8
+    {
+        if (self.gpio) |gpio|
+        {
+            return @intCast( try gpio.doCmd( .ser_read_byte,
+                                             true,
+                                             self.serial,
+                                             0,
+                                             null ) & 0xFF );
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.writeByte
+    // -------------------------------------------------------------------------
+
+    pub fn writeByte( self : *Serial, in_char : u8 ) !void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .ser_write_byte,
+                                true,
+                                self.serial,
+                                in_char,
+                                null );
+
+            return;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.read
+    // -------------------------------------------------------------------------
+
+    pub fn read( self : *Serial, out_data : [] u8 ) !u32
+    {
+        std.debug.assert( out_data.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const result = try gpio.doCmd( .ser_read,
+                                           false,
+                                           self.serial,
+                                           @intCast( out_data.len ),
+                                           null );
+
+            defer gpio.cmd_mutex.unlock();
+
+            _ = try gpio.cmd_stream.read( out_data );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.write
+    // -------------------------------------------------------------------------
+
+    pub fn write( self : *Serial, in_data : [] const u8 ) !void
+    {
+        std.debug.assert( in_data.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const ext = [_]Extent{ in_data };
+
+            _ = try gpio.doCmd( .ser_write,
+                                true,
+                                self.serial,
+                                0,
+                                &ext );
+
+            return;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Serial.dataAvailable
+    // -------------------------------------------------------------------------
+
+    pub fn dataAvailable( self : *Serial ) !u32
+    {
+        if (self.gpio) |gpio|
+        {
+            return @intCast( try gpio.doCmd( .ser_data_avail,
+                                             true,
+                                             self.serial,
+                                             0,
+                                             null ) & 0xFF );
+        }
+
+        return error.NotOpen;
+    }
+};
+
+
+// =============================================================================
+//  BitBangSerial Interface
+// =============================================================================
+
+pub const BitBangSerial = struct
+{
+    gpio      : ?*PiGPIO           = null,
+    serial    : u32                = 0,
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSerial.open
+    // -------------------------------------------------------------------------
+    /// Configure the selected channel for serial.
+    ///
+    /// Parameters:
+    /// - in_gpio
+    /// - in_interface - the serial interface path name (e.g. "/dev/ttyUSB0")
+    /// - in_bit-rate - the transmission speed in bits per second.
+    /// - in_flags - currently unused (set to 0)
+    ///
+    /// The valid bit rates are:  50, 75, 110, 134, 150, 200, 300, 600, 1200,
+    /// 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200, or 230400.
+
+    pub fn open( self         : *Serial,
+                 in_gpio      : *PiGPIO,
+                 in_interface : [] const u8,
+                 in_bit_rate  : u32,
+                 in_bits      : u6 ) !void
+    {
+        std.debug.assert( in_bits >= 1  and  in_bits <= 32 );
+        std.debug.assert( in_bit_rate >= 50  and  in_bit_rate <= 250_000 );
+
+        self.close();
+
+        const ext = [_]Extent{ in_interface };
+
+        self.serial = try in_gpio.doCmd( .bbser_open,
+                                         true,
+                                         in_bit_rate,
+                                         in_bits,
+                                         &ext );
+
+        self.gpio      = in_gpio;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSerial.close
+    // -------------------------------------------------------------------------
+
+    pub fn close( self : *Serial ) void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = gpio.doCmd( .bbser_close,
+                            true,
+                            self.serial,
+                            0,
+                            null ) catch |err|
+            {
+                log.warn( "BB Serial close error (ignored): {}", .{ err } );
+            };
+
+            self.gpio = null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSerial.read
+    // -------------------------------------------------------------------------
+
+    pub fn read( self : *Serial, out_data : [] u8 ) !u32
+    {
+        std.debug.assert( out_data.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const result = try gpio.doCmd( .ser_read,
+                                           false,
+                                           self.serial,
+                                           @intCast( out_data.len ),
+                                           null );
+
+            defer gpio.cmd_mutex.unlock();
+
+            _ = try gpio.cmd_stream.read( out_data );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSerial.invert
+    // -------------------------------------------------------------------------
+
+    pub fn invert( self : *Serial, in_invert : bool ) !void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .bbser_invert,
+                                true,
+                                self.serial,
+                                @intFromBool( in_invert ),
+                                null );
+            return;
         }
 
         return error.NotOpen;
@@ -2705,9 +3123,9 @@ test "Connection"
 
     try testing.expectEqual( 0x7F00, try gpio.shell( "foo", "bar" ) );
 
-    std.log.warn("\nTick: {!}", .{ gpio.getCurrentTick() });
-    std.log.warn("\nHVer: {!X}", .{ gpio.getHardwareVersion() });
-    std.log.warn("\nGVer: {!}", .{ gpio.getPiGPIOVersion() });
+    log.info("\nTick: {!}", .{ gpio.getCurrentTick() });
+    log.info("\nHVer: {!X}", .{ gpio.getHardwareVersion() });
+    log.info("\nGVer: {!}", .{ gpio.getPiGPIOVersion() });
 }
 
 // -----------------------------------------------------------------------------
@@ -2731,7 +3149,6 @@ test "Block Transfer"
     try gpio.maskedUpdateBank1( 0xFFFF_FFFF, 1 << 6 );
     try gpio.maskedSetModeBank1( .input, 1 << 6 );
     try gpio.maskedSetPullBank1( .none, 1 << 6 );
-
 }
 
 // -----------------------------------------------------------------------------
@@ -2765,7 +3182,6 @@ test "basic pin test"
 
   try gpio.connect( testing.allocator, null, null );
   defer gpio.disconnect();
-
 
   try digital_pin.setMode( .input );
   try digital_pin.setPull( .up );
@@ -2841,7 +3257,9 @@ test "I2C"
     try i2c.writeI2CBlockData( 1, &buffer );
     _ = try i2c.readI2CBlockData( 1, &buffer );
 
-    _ = try i2c.procedureCall( 1, &buffer, &buffer );
+    _ = try i2c.procedureCall( 1, 42 );
+
+    _ = try i2c.blockProcedureCall( 1, &buffer, &buffer );
 }
 
 // -----------------------------------------------------------------------------
@@ -2854,7 +3272,7 @@ fn testLevelCB( in_pin     : PiGPIO.Pin,
     _ = in_tick;
     _ = in_pin;
 
-    std.log.info("\ncallback saw edge: {any}", .{ in_edge });
+    log.info("\ncallback saw edge: {any}", .{ in_edge });
 
     if (in_context) |context|
     {
@@ -2888,7 +3306,6 @@ test "Level Callback"
     std.time.sleep( 500_000_000 );
 
     try testing.expect( .rising == result );
-
 }
 
 // -----------------------------------------------------------------------------
@@ -2901,7 +3318,7 @@ fn testEventCB( in_gpio    : *PiGPIO,
     _ = in_tick;
     _ = in_gpio;
 
-    std.log.info("\ncallback saw event: {}", .{ in_event });
+    log.info("\ncallback saw event: {}", .{ in_event });
 
     if (in_context) |context|
     {
@@ -2909,7 +3326,6 @@ fn testEventCB( in_gpio    : *PiGPIO,
         ctx.* = in_event;
     }
 }
-
 
 test "Event Callback"
 {
@@ -2930,4 +3346,38 @@ test "Event Callback"
 
     try testing.expectEqual( 13, result );
 
+}
+
+// -----------------------------------------------------------------------------
+
+test "Serial Functions"
+{
+    var gpio   : PiGPIO        = .{};
+    var serial : PiGPIO.Serial = .{};
+    var buffer : [15]u8        = undefined;
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try serial.open( &gpio, "/dev/ttyUSB0", 9600, 0 );
+    defer serial.close();
+
+    try serial.writeByte( 'x' );
+    try serial.write( "This is a test\n" );
+
+    var   avail  = try serial.dataAvailable();
+    const a_char = serial.readByte();
+
+    if (avail == 0)
+    {
+        try testing.expectError( error.ser_read_no_data, a_char );
+    }
+    else
+    {
+        log.info( "Byte read: {!}", .{ a_char } );
+    }
+
+    avail = try serial.dataAvailable();
+
+    // try testing.expectEqual( avail, try serial.read( &buffer ) );
 }
