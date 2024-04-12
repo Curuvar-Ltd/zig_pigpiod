@@ -52,37 +52,40 @@ const log = std.log.scoped( .PiGPIO );
 // =============================================================================
 
 /// The allocator that we will use as needed.
-allocator       : std.mem.Allocator = undefined,
+allocator : std.mem.Allocator = undefined,
 
 /// The DNS name or IP address of pigpiod daemon.
-address         : [] const u8       = "::",
+address : [] const u8 = "::",
 
 /// The port the daemon is listening on.
-port            : u16               = 8888,
+port : u16 = 8888,
 
 /// A stream for sending commands to the daemon and receiving responses.
-cmd_stream      : std.net.Stream    = undefined,
+cmd_stream : std.net.Stream = undefined,
 
 /// A mutex to make sending commands thread safe.
-cmd_mutex       : std.Thread.Mutex  = .{},
+cmd_mutex : std.Thread.Mutex  = .{},
 
 /// A handle to identify us to the daemon for notification control.
-notify_handle   : u32               = 0,
+notify_handle : u32 = 0,
 
 /// A thread that listens for notification from the server.
-notify_thread   : ?std.Thread       = null,
+notify_thread : ?std.Thread = null,
 
-/// A bitmap of current pins that we want notification for.
-notify_bits    : u32               = 0,
+/// A bitmap of current pins that we want level notifications for.
+notify_level_bits : u32 = 0,
+
+/// A bitmap of current pins that we want event notifications for.
+notify_event_bits : u32 = 0,
 
 /// A mutex to make callback list manipulation thread safe.
-list_mutex      : std.Thread.Mutex  = .{},
+list_mutex : std.Thread.Mutex = .{},
 
 /// Level change notification callbacks.
-level_cb_first  : ?*LevelCallback        = null,
+level_cb_first : ?*LevelCallback = null,
 
 /// Event notification callbacks.
-event_cb_first  : ?*EventCallback        = null,
+event_cb_first : ?*EventCallback = null,
 
 // =============================================================================
 //  Public Constants
@@ -362,7 +365,7 @@ const LevelCallback = struct
 const EventCallback = struct
 {
     next    : ?*EventCallback,
-    event   : u32,
+    event   : u5,
     func    : EventCBFunc,
     context : ?*anyopaque,
 };
@@ -373,33 +376,33 @@ const EventCallback = struct
 /// Commands supported by pigpiod daemon.
 const Command = enum(u8)
 {
-    mode_set       =   0,
-    mode_get       =   1,
-    pull_set       =   2,
-    pin_get        =   3,
-    pin_set        =   4,
-    pwm_duty_set   =   5,
-    pwm_rate_set   =   6,
-    pwm_freq_set   =   7,
-    servo_set      =   8,
-    wdog_set       =   9,
-    band_read_1    =  10,
-    band_read_2    =  11,
-    band_clear_1   =  12,
-    band_clear_2   =  13,
-    band_set_1     =  14,
-    band_set_2     =  15,
-    tick_get       =  16,
-    hw_ver_get     =  17,
+    mode_set        =   0,
+    mode_get        =   1,
+    pull_set        =   2,
+    pin_get         =   3,
+    pin_set         =   4,
+    pwm_duty_set    =   5,
+    pwm_rate_set    =   6,
+    pwm_freq_set    =   7,
+    servo_set       =   8,
+    wdog_set        =   9,
+    band_read_1     =  10,
+    band_read_2     =  11,
+    band_clear_1    =  12,
+    band_clear_2    =  13,
+    band_set_1      =  14,
+    band_set_2      =  15,
+    tick_get        =  16,
+    hw_ver_get      =  17,
     NO     = 18,
-    NB     = 19,
+    level_bits_set  =  19,
     NP     = 20,
     NC     = 21,
-    pwm_rate_get   =  22,
-    pwm_freq_get   =  23,
-    pwm_real_range =  24,
+    pwm_rate_get    =  22,
+    pwm_freq_get    =  23,
+    pwm_real_range  =  24,
     HELP   = 25,
-    version_get    =  26,
+    version_get     =  26,
     WVCLR  = 27,
     WVAG   = 28,
     WVAS   = 29,
@@ -410,7 +413,7 @@ const Command = enum(u8)
     WVSM   = 34,
     WVSP   = 35,
     WVSC   = 36,
-    pin_trigger    =  37,
+    pin_trigger     =  37,
     PROC   = 38,
     PROCD  = 39,
     PROCR  = 40,
@@ -428,29 +431,29 @@ const Command = enum(u8)
     WVTXR  = 52,
     WVNEW  = 53,
 
-    i2c_open       =  54,
-    i2c_close      =  55,
-    i2c_rx_raw     =  56,
-    i2c_tx_raw     =  57,
-    i2c_tx_quick   =  58,
-    i2c_tx_raw_u8  =  59,
-    i2c_rx_raw_u8  =  60,
-    i2c_rx_u8      =  61,
-    i2c_tx_u8      =  62,
-    i2c_rx_u16     =  63,
-    i2c_tx_u16     =  64,
-    i2c_rx_block   =  65,
-    i2c_tx_block   =  66,
-    i2c_rx_i2c_blk =  67,
-    i2c_tx_i2c_blk =  68,
-    i2c_proc_call  =  69,
-    i2c_zip        =  70,
+    i2c_open        =  54,
+    i2c_close       =  55,
+    i2c_rx_raw      =  56,
+    i2c_tx_raw      =  57,
+    i2c_tx_quick    =  58,
+    i2c_tx_raw_u8   =  59,
+    i2c_rx_raw_u8   =  60,
+    i2c_rx_u8       =  61,
+    i2c_tx_u8       =  62,
+    i2c_rx_u16      =  63,
+    i2c_tx_u16      =  64,
+    i2c_rx_block    =  65,
+    i2c_tx_block    =  66,
+    i2c_rx_i2c_blk  =  67,
+    i2c_tx_i2c_blk  =  68,
+    i2c_proc_call   =  69,
+    i2c_zip         =  70,
 
-    spi_open       =  71,
-    spi_close      =  72,
-    spi_read       =  73,
-    spi_write      =  74,
-    spi_trasfer    =  75,
+    spi_open        =  71,
+    spi_close       =  72,
+    spi_read        =  73,
+    spi_write       =  74,
+    spi_trasfer     =  75,
 
     SERO   = 76,
     SERC   = 77,
@@ -460,14 +463,14 @@ const Command = enum(u8)
     SERW   = 81,
     SERDA  = 82,
 
-    pwm_duty_get    = 83,
-    servo_get       = 84,
+    pwm_duty_get    =  83,
+    servo_get       =  84,
 
     HC     = 85,
     HP     = 86,
 
-    custom_1       =  87,
-    custom_2       =  88,
+    custom_1        =  87,
+    custom_2        =  88,
 
     BI2CC  = 89,
     BI2CO  = 90,
@@ -482,16 +485,16 @@ const Command = enum(u8)
     CGI    = 95,
     CSI    = 96,
 
-    glitch_filter  = 97,
-    noise_filter   = 98,
+    glitch_filter   =  97,
+    noise_filter    =  98,
 
-    begin_notify   = 99,  // Inform server that this is the notify stream.
+    begin_notify    =  99,  // Inform server that this is the notify stream.
 
     WVTXM  = 100,
     WVTAT  = 101,
 
-    current_set   = 102,
-    current_get   = 103,
+    current_set     = 102,
+    current_get     = 103,
 
     FO     = 104,
     FC     = 105,
@@ -500,7 +503,7 @@ const Command = enum(u8)
     FS     = 108,
     FL     = 109,
 
-    shell_cmd      = 110,
+    shell_cmd       = 110,
 
     BSPIC  = 111,
     BSPIO  = 112,
@@ -508,8 +511,8 @@ const Command = enum(u8)
 
     BSCX   = 114,
 
-    EVM    = 115,
-    trigger_event  = 116,
+    events_bits_set = 115,
+    trigger_event   = 116,
 
     PROCU  = 117,
     WVCAP  = 118,
@@ -575,7 +578,8 @@ pub fn disconnect( self : *PiGPIO ) void
 
     self.list_mutex.lock();
 
-    self.notify_bits = 0;
+    self.notify_level_bits = 0;
+    self.notify_event_bits = 0;
 
     var a_lvl_cb = self.level_cb_first;
     self.level_cb_first = null;
@@ -988,7 +992,11 @@ fn addEventCallback( self       : *PiGPIO,
 
     if (start_notify)
     {
-      self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+        self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+    }
+    else
+    {
+        try self.updateNotifyEventBits();
     }
 }
 
@@ -1001,7 +1009,7 @@ fn addEventCallback( self       : *PiGPIO,
 fn removeEventCallback( self       : *PiGPIO,
                         in_event   : u5,
                         in_func    : EventCBFunc,
-                        in_context : ?*anyopaque )void
+                        in_context : ?*anyopaque ) void
 {
     self.list_mutex.lock();
     defer self.list_mutex.unlock();
@@ -1026,8 +1034,10 @@ fn removeEventCallback( self       : *PiGPIO,
 
             self.allocator.destroy( cb );
 
+            self.updateNotifyEventBits() catch {};
+
             // ### TODO ### Can we turn off the notify stream?
-            //  ### TODO ### self.notify_bits &= ~(1 << in_pin);
+            //  ### TODO ### self.notify_event_bits &= ~(1 << in_pin);
 
             return;
         }
@@ -1044,7 +1054,7 @@ fn removeEventCallback( self       : *PiGPIO,
 
 pub fn triggerEvent( self : *PiGPIO, in_event : u5 ) Error!void
 {
-    return try self.doCmd( .trigger_event, true, in_event, 0, null );
+    _ = try self.doCmd( .trigger_event, true, in_event, 0, null );
 }
 
 // =============================================================================
@@ -1182,7 +1192,7 @@ fn addLevelCallback( self       : *PiGPIO,
     }
     else
     {
-        try self.updateNotifyBits();
+        try self.updateNotifyLevelBits();
     }
 }
 
@@ -1225,10 +1235,10 @@ fn removeLevelCallback( self       : *PiGPIO,
 
             self.allocator.destroy( cb );
 
-            self.updateNotifyBits() catch {};
+            self.updateNotifyLevelBits() catch {};
 
             // ### TODO ### Can we turn off the notify stream?
-            //  ### TODO ### self.notify_bits &= ~(1 << in_pin);
+            //  ### TODO ### self.notify_level_bits &= ~(1 << in_pin);
 
 
             return;
@@ -1240,10 +1250,10 @@ fn removeLevelCallback( self       : *PiGPIO,
 }
 
 // -----------------------------------------------------------------------------
-// Function: updateNotifyBits
+// Function: updateNotifyLevelBits
 // -----------------------------------------------------------------------------
 
-fn updateNotifyBits( self : *PiGPIO ) !void
+fn updateNotifyLevelBits( self : *PiGPIO ) !void
 {
     // Note to self: don't lock the mutex, we should be
     // running under one already.
@@ -1259,16 +1269,45 @@ fn updateNotifyBits( self : *PiGPIO ) !void
         a_callback = cb.next;
     }
 
-    if (bits != self.notify_bits)
+    if (bits != self.notify_level_bits)
     {
-        self.notify_bits = bits;
+        self.notify_level_bits = bits;
 
-        // log.debug( "NB {X} {X}", .{ self.notify_handle, bits } );
+        // log.debug( "level_bits_set {X} {X}", .{ self.notify_handle, bits } );
 
-        _ = try self.doCmd( .NB, true, self.notify_handle, bits, null );
+        _ = try self.doCmd( .level_bits_set, true, self.notify_handle, bits, null );
     }
 }
 
+// -----------------------------------------------------------------------------
+// Function: updateNotifyEventBits
+// -----------------------------------------------------------------------------
+
+fn updateNotifyEventBits( self : *PiGPIO ) !void
+{
+    // Note to self: don't lock the mutex, we should be
+    // running under one already.
+
+    var a_callback = self.event_cb_first;
+
+    var bits : u32 = 0;
+
+    while (a_callback) |cb|
+    {
+        bits |= @as( u32, 1 ) << cb.event;
+
+        a_callback = cb.next;
+    }
+
+    if (bits != self.notify_event_bits)
+    {
+        self.notify_event_bits = bits;
+
+        // log.debug( "event_bits_set {X} {X}", .{ self.notify_handle, bits } );
+
+        _ = try self.doCmd( .events_bits_set, true, self.notify_handle, bits, null );
+    }
+}
 // -----------------------------------------------------------------------------
 //  Function: notifyThread
 // -----------------------------------------------------------------------------
@@ -1327,9 +1366,14 @@ fn notifyThread( self : *PiGPIO ) void
 
     self.notify_handle = hdr.p3;
 
-    self.updateNotifyBits() catch |err|
+    self.updateNotifyLevelBits() catch |err|
     {
-        log.err( "updateNotifyBits error {}", .{ err } );
+        log.err( "updateNotifyLevelBits error {}", .{ err } );
+    };
+
+    self.updateNotifyEventBits() catch |err|
+    {
+        log.err( "updateNotifyEventBits error {}", .{ err } );
     };
 
     runloop: while(   self.level_cb_first != null
@@ -1360,7 +1404,7 @@ fn notifyThread( self : *PiGPIO ) void
 
         if (report.flags == 0)
         {
-            const changed = (report.level ^ last_level) & self.notify_bits;
+            const changed = (report.level ^ last_level) & self.notify_level_bits;
 
             last_level = report.level;
 
@@ -1935,15 +1979,15 @@ pub const Pin = struct
     // ==== Pin Callback Setup =================================================
 
     // -------------------------------------------------------------------------
-    // Function: Pin.addCallback
+    // Function: Pin.addLevelCallback
     // -------------------------------------------------------------------------
     /// Set a callback function that will be called if the pin's state
     /// changes.
 
-    pub fn addCallback( self       : Pin,
-                        in_edge    : Edge,
-                        in_func    : LevelCBFunc,
-                        in_context : ?*anyopaque )!void
+    pub fn addLevelCallback( self       : Pin,
+                             in_edge    : Edge,
+                             in_func    : LevelCBFunc,
+                             in_context : ?*anyopaque )!void
     {
         if (self.pin > 31) return error.bad_user_gpio;
 
@@ -1964,10 +2008,10 @@ pub const Pin = struct
     /// Set a callback function that will be called if the pin's state
     /// changes.
 
-    pub fn removeCallback( self       : Pin,
-                           in_edge    : Edge,
-                           in_func    : LevelCBFunc,
-                           in_context : ?*anyopaque ) void
+    pub fn removeLevelCallback( self       : Pin,
+                                in_edge    : Edge,
+                                in_func    : LevelCBFunc,
+                                in_context : ?*anyopaque ) void
     {
         if (self.pin > 31) return;
 
@@ -2659,6 +2703,8 @@ test "Connection"
     try gpio.connect( testing.allocator, "::", 8888 );
     defer gpio.disconnect();
 
+    try testing.expectEqual( 0x7F00, try gpio.shell( "foo", "bar" ) );
+
     std.log.warn("\nTick: {!}", .{ gpio.getCurrentTick() });
     std.log.warn("\nHVer: {!X}", .{ gpio.getHardwareVersion() });
     std.log.warn("\nGVer: {!}", .{ gpio.getPiGPIOVersion() });
@@ -2713,7 +2759,7 @@ test "custom command"
 test "basic pin test"
 {
   var   gpio : PiGPIO = .{};
-  const digital_pin   = gpio.pin(  6 );
+  const digital_pin   = gpio.pin( 6 );
 //   const pwm_pin       = gpio.pin(  6 );
 //   const servi_pin     = gpio.pin(  6 );
 
@@ -2796,4 +2842,92 @@ test "I2C"
     _ = try i2c.readI2CBlockData( 1, &buffer );
 
     _ = try i2c.procedureCall( 1, &buffer, &buffer );
+}
+
+// -----------------------------------------------------------------------------
+
+fn testLevelCB( in_pin     : PiGPIO.Pin,
+                in_edge    : PiGPIO.Edge,
+                in_tick    : u32,
+                in_context : ?*anyopaque ) void
+{
+    _ = in_tick;
+    _ = in_pin;
+
+    std.log.info("\ncallback saw edge: {any}", .{ in_edge });
+
+    if (in_context) |context|
+    {
+        const ctx : *PiGPIO.Edge = @ptrCast( context );
+        ctx.* = in_edge;
+    }
+}
+
+
+test "Level Callback"
+{
+    var gpio   : PiGPIO        = .{};
+    var result : PiGPIO.Edge   = .either;
+    var test_pin               = gpio.pin( 6 );
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try test_pin.addLevelCallback( .rising, testLevelCB, @ptrCast( &result ) );
+    defer test_pin.removeLevelCallback( .rising, testLevelCB, @ptrCast( &result ) );
+
+    std.time.sleep( 100_000_000 );
+
+    try test_pin.setMode( .input );
+    try test_pin.setPull( .down );
+
+    std.time.sleep( 100_000_000 );
+
+    try test_pin.setPull( .up );
+
+    std.time.sleep( 500_000_000 );
+
+    try testing.expect( .rising == result );
+
+}
+
+// -----------------------------------------------------------------------------
+
+fn testEventCB( in_gpio    : *PiGPIO,
+               in_event   : u5,
+               in_tick    : u32,
+               in_context : ?*anyopaque ) void
+{
+    _ = in_tick;
+    _ = in_gpio;
+
+    std.log.info("\ncallback saw event: {}", .{ in_event });
+
+    if (in_context) |context|
+    {
+        const ctx : *u8 = @ptrCast( context );
+        ctx.* = in_event;
+    }
+}
+
+
+test "Event Callback"
+{
+    var gpio : PiGPIO = .{};
+    var result : u32 = 0;
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try gpio.addEventCallback( 13, testEventCB, @ptrCast( &result ) );
+    defer gpio.removeEventCallback( 13, testEventCB, @ptrCast( &result ) );
+
+    std.time.sleep( 100_000_000 );
+
+    try gpio.triggerEvent( 13 );
+
+    std.time.sleep( 100_000_000 );
+
+    try testing.expectEqual( 13, result );
+
 }
