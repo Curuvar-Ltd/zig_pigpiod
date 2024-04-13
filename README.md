@@ -29,6 +29,7 @@ Present but not well tested
 - I2C master communications
 - Serial interface (hardware and bit-bang)
 - Scripting commands
+- File operation commands
 
 If the current version does not support something you need, send a message via
 [the Curuvar contact page](https://curuvar.com/contact?to=support).

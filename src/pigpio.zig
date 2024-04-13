@@ -496,12 +496,12 @@ const Command = enum(u8)
     current_set     = 102,
     current_get     = 103,
 
-    FO     = 104,
-    FC     = 105,
-    FR     = 106,
-    FW     = 107,
-    FS     = 108,
-    FL     = 109,
+    file_open       = 104,
+    file_close      = 105,
+    file_read       = 106,
+    file_write      = 107,
+    file_seek       = 108,
+    file_list       = 109,
 
     shell_cmd       = 110,
 
@@ -609,21 +609,6 @@ pub fn disconnect( self : *PiGPIO ) void
     self.cmd_stream.close();
 
     log.debug( "-- PiGPIO Disconnected --", .{} );
-}
-
-// -----------------------------------------------------------------------------
-//  Public function: pin
-// -----------------------------------------------------------------------------
-/// Return an initialized Pin structure.
-///
-/// Paramter:
-/// - pin - the Broadcom pin number.
-
-pub fn pin( self : *PiGPIO, in_pin : u6 ) Pin
-{
-    std.debug.assert( in_pin <= 53 );
-
-    return .{ .gpio = self, .pin = in_pin };
 }
 
 // -----------------------------------------------------------------------------
@@ -1150,6 +1135,34 @@ pub fn scriptStatus( self       : *PiGPIO,
     _ = try self.cmd_stream.read( param[0..4*out_params.len] );
 
     return result;
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: pin
+// -----------------------------------------------------------------------------
+/// Return an initialized Pin structure.
+///
+/// Paramter:
+/// - pin - the Broadcom pin number.
+
+pub fn pin( self : *PiGPIO, in_pin : u6 ) Pin
+{
+    std.debug.assert( in_pin <= 53 );
+
+    return .{ .gpio = self, .pin = in_pin };
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: pin
+// -----------------------------------------------------------------------------
+/// Return an initialized Pin structure.
+///
+/// Paramter:
+/// - pin - the Broadcom pin number.
+
+pub fn spi( self : *PiGPIO ) SPI
+{
+    return .{ .gpio = self };
 }
 
 
@@ -2976,7 +2989,6 @@ pub const Serial = struct
     }
 };
 
-
 // =============================================================================
 //  BitBangSerial Interface
 // =============================================================================
@@ -3087,6 +3099,161 @@ pub const BitBangSerial = struct
 
         return error.NotOpen;
     }
+};
+
+// =============================================================================
+//  File Interface
+// =============================================================================
+
+pub const File = struct
+{
+    gpio    : ?*PiGPIO  = null,
+    file    : u32       = 0,
+
+    pub const READ   : u5 = 0x01;
+    pub const WRITE  : u5 = 0x02;
+    pub const RW     : u5 = 0x03;
+    pub const APPEND : u5 = 0x04;
+    pub const CREATE : u5 = 0x08;
+    pub const TRUNC  : u5 = 0x10;
+
+    pub const From = enum (u2)
+    {
+        start   = 0,
+        current = 1,
+        end     = 2,
+    };
+
+    // -------------------------------------------------------------------------
+    //  Public Function: File.open
+    // -------------------------------------------------------------------------
+
+    pub fn open( self         : *Serial,
+                 in_gpio      : *PiGPIO,
+                 in_name      : [] const u8,
+                 in_mode      : u5 ) !void
+    {
+        self.close();
+
+        const ext = [_]Extent{ in_name };
+
+        self.file = try in_gpio.doCmd( .file_open, true, in_mode, 0, &ext );
+
+        self.gpio = in_gpio;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: File.close
+    // -------------------------------------------------------------------------
+
+    pub fn close( self : *File ) void
+    {
+        if (self.gpio) |gpio|
+        {
+            _ = gpio.doCmd( .file_close, true, self.file, 0, null );
+        }
+
+        self.gpio = null;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: File.read
+    // -------------------------------------------------------------------------
+
+    pub fn read( self : *File, out_data : []u8 ) !u32
+    {
+        std.debug.assert( out_data.len <= 0xFFFF_FFFF );
+
+        if (self.gpio) |gpio|
+        {
+            const result = try gpio.doCmd( .file_read,
+                                           false,
+                                           self.file,
+                                           @intCast( out_data.len ),
+                                           null );
+
+            defer gpio.cmd_mutex.unlock();
+
+            _ = try gpio.cmd_stream.read( out_data );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: File.write
+    // -------------------------------------------------------------------------
+
+    pub fn write( self : *File, in_data : [] const u8 ) !void
+    {
+        std.debug.assert( in_data.len <= 0xFFFF_FFFF );
+
+        const ext = [_]Extent{ in_data };
+
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .file_write, true, self.file, 0, &ext );
+            return;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: File.seek
+    // -------------------------------------------------------------------------
+
+    pub fn seek( self : *File, in_position : i32, in_from : From ) !void
+    {
+        const val : u32 = @intFromBool( in_from );
+        const ext = [_]Extent{ extentFrom( u32, &val ) };
+
+        if (self.gpio) |gpio|
+        {
+            _ = try gpio.doCmd( .file_seek,
+                                true,
+                                self.file,
+                                @bitCast( in_position ),
+                                &ext );
+            return;
+        }
+
+        return error.NotOpen;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: File.list
+    // -------------------------------------------------------------------------
+
+    pub fn list( self       : *File,
+                 in_pattern : [] const u8,
+                 out_result : []u8 ) !u32
+    {
+        std.debug.assert( in_pattern.len <= 0xFFFF_FFFF );
+        std.debug.assert( out_result.len <= 0xFFFF_FFFF );
+
+        const ext = [_]Extent{ in_pattern };
+
+        if (self.gpio) |gpio|
+        {
+            const result = try gpio.doCmd( .file_list,
+                                           false,
+                                           @intCast( out_result.len ),
+                                           0,
+                                           &ext );
+
+            defer gpio.cmd_mutex.unlock();
+
+            _ = try gpio.cmd_stream.read( out_result );
+
+            return result;
+        }
+
+        return error.NotOpen;
+    }
+
 };
 
 // =============================================================================
@@ -3354,7 +3521,7 @@ test "Serial Functions"
 {
     var gpio   : PiGPIO        = .{};
     var serial : PiGPIO.Serial = .{};
-    var buffer : [15]u8        = undefined;
+    // var buffer : [15]u8        = undefined;
 
     try gpio.connect( testing.allocator, null, null );
     defer gpio.disconnect();
@@ -3380,4 +3547,27 @@ test "Serial Functions"
     avail = try serial.dataAvailable();
 
     // try testing.expectEqual( avail, try serial.read( &buffer ) );
+}
+
+// -----------------------------------------------------------------------------
+
+test "File Functions"
+{
+    var gpio   : PiGPIO      = .{};
+    var file   : PiGPIO.File = .{};
+    var buffer : [64]u8      = undefined;
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try file.open( &gpio, "test.file", File.READ );
+    defer file.close();
+
+    try file.write( "test data" );
+
+    try file.seek( 0, .start );
+
+    _ = try file.read( &buffer );
+
+    _ = try file.list( "test.*", &buffer );
 }
