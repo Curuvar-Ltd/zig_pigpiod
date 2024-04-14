@@ -1,9 +1,9 @@
-# PiGPIO-Zig
+# ZPIGPIO
 
-PiGPIO-Zig is a module that communicates with the Raspberry Pi's pigpiod
+ZPIGPIO is a Zig module that communicates with the Raspberry Pi's pigpiod
 GPIO daemon.
 
-~~PiGPIO-Zig provides most of the capabilities of C based pigpiod_if2
+~~PIGPIO-Zig provides most of the capabilities of C based pigpiod_if2
 interface, but is written entirely in zig.  The missing capabilities are
 functions that pigpiod implements directly on the client, and that Zig
 provides native function for.~~
