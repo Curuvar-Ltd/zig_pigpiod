@@ -16,7 +16,7 @@ pub fn build( b: * std.Build ) void
     //  Create the pigpio module
     // =========================================================================
 
-    _ = b.addModule( "PiGPIO",
+    _ = b.addModule( "ZPIGPIO",
                      .{
                          .root_source_file = .{ .path = "src/pigpio.zig" },
                          .target           = target,
