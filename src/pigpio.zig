@@ -271,12 +271,6 @@ pub const Error      =    std.posix.WriteError
                        || std.posix.ReadError
                        || PiGPIOError;
 
-pub const SPIError   =    Error
-                       || error{ NotOpen };
-
-pub const I2CError   =    Error
-                       || error{ NotOpen };
-
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  Public Type Definitions
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1143,28 +1137,54 @@ pub fn scriptStatus( self       : *PiGPIO,
 /// Return an initialized Pin structure.
 ///
 /// Paramter:
-/// - pin - the Broadcom pin number.
+/// - in_num - the Broadcom pin number.
 
-pub fn pin( self : *PiGPIO, in_pin : u6 ) Pin
+pub fn pin( self : *PiGPIO, in_num : u6 ) Pin
 {
-    std.debug.assert( in_pin <= 53 );
+    std.debug.assert( in_num <= 53 );
 
-    return .{ .gpio = self, .pin = in_pin };
+    return .{ .gpio = self, .num = in_num };
 }
 
 // -----------------------------------------------------------------------------
-//  Public function: pin
+//  Public function: spi
 // -----------------------------------------------------------------------------
-/// Return an initialized Pin structure.
-///
-/// Paramter:
-/// - pin - the Broadcom pin number.
+/// Return a partially initialized SPI structure.
 
 pub fn spi( self : *PiGPIO ) SPI
 {
     return .{ .gpio = self };
 }
 
+// -----------------------------------------------------------------------------
+//  Public function: i2c
+// -----------------------------------------------------------------------------
+/// Return a partially initialized I2C structure.
+
+pub fn i2c( self : *PiGPIO ) I2C
+{
+    return .{ .gpio = self };
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: serial
+// -----------------------------------------------------------------------------
+/// Return a partially initialized Serial structure.
+
+pub fn serial( self : *PiGPIO ) Serial
+{
+    return .{ .gpio = self };
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: file
+// -----------------------------------------------------------------------------
+/// Return a partially initialized File structure.
+
+pub fn file( self : *PiGPIO ) File
+{
+    return .{ .gpio = self };
+}
 
 // =============================================================================
 //  Private Functions
@@ -1533,7 +1553,7 @@ fn notifyThread( self : *PiGPIO ) void
                         or (a_callback.edge == .rising  and  level)
                         or (a_callback.edge == .falling and !level))
                     {
-                        a_callback.func( Pin{ .pin = a_callback.pin, .gpio = self },
+                        a_callback.func( self.pin( a_callback.pin ),
                                          @enumFromInt( @intFromBool( level ) ),
                                          report.tick,
                                          a_callback.context );
@@ -1553,7 +1573,7 @@ fn notifyThread( self : *PiGPIO ) void
             {
                 if (a_callback.pin == (report.flags & 0x1F))
                 {
-                    a_callback.func( Pin{ .pin = a_callback.pin, .gpio = self },
+                    a_callback.func( self.pin( a_callback.pin ),
                                      .timeout,
                                      report.tick,
                                      a_callback.context );
@@ -1768,7 +1788,7 @@ pub const Pin = struct
 {
     gpio  : *PiGPIO,
     /// Broadcom pin number
-    pin   : u6,
+    num   : u6,
 
     // -------------------------------------------------------------------------
     //  Public Function: Pin.setHigh
@@ -1779,7 +1799,7 @@ pub const Pin = struct
 
     pub fn setHigh( self : Pin ) Error!void
     {
-        _ = try self.gpio.doCmd( .pin_set, true, self.pin, 1, null );
+        _ = try self.gpio.doCmd( .pin_set, true, self.num, 1, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1791,7 +1811,7 @@ pub const Pin = struct
 
     pub fn setLow( self : Pin ) Error!void
     {
-        _ = try self.gpio.doCmd( .pin_set, true, self.pin, 0, null );
+        _ = try self.gpio.doCmd( .pin_set, true, self.num, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1805,7 +1825,7 @@ pub const Pin = struct
     {
         _ = try self.gpio.doCmd( .pin_set,
                                  true,
-                                 self.pin,
+                                 self.num,
                                  @intFromBool( in_value ),
                                  null );
     }
@@ -1817,7 +1837,7 @@ pub const Pin = struct
 
     pub fn get( self : Pin ) Error!bool
     {
-        return try self.gpio.doCmd( .pin_get, true, self.pin, 0, null ) != 0;
+        return try self.gpio.doCmd( .pin_get, true, self.num, 0, null ) != 0;
     }
 
     // -------------------------------------------------------------------------
@@ -1838,7 +1858,7 @@ pub const Pin = struct
 
         _ = try self.gpio.doCmd( .pin_trigger,
                                  true,
-                                 self.pin,
+                                 self.num,
                                  in_width,
                                  &ext );
     }
@@ -1852,7 +1872,7 @@ pub const Pin = struct
     {
         _ = try self.gpio.doCmd( .mode_set,
                                  true,
-                                 self.pin,
+                                 self.num,
                                  @intFromEnum( in_mode ),
                                  null );
     }
@@ -1864,7 +1884,7 @@ pub const Pin = struct
 
     pub fn getMode( self : Pin ) Error!Mode
     {
-        const result = try self.gpio.doCmd( .mode_get, true, self.pin, 0, null );
+        const result = try self.gpio.doCmd( .mode_get, true, self.num, 0, null );
 
         return @enumFromInt( result );
     }
@@ -1878,7 +1898,7 @@ pub const Pin = struct
     {
         _ = try self.gpio.doCmd( .pull_set,
                                  true,
-                                 self.pin,
+                                 self.num,
                                  @intFromEnum( in_pull ),
                                  null );
     }
@@ -1890,7 +1910,7 @@ pub const Pin = struct
 
     pub fn setPadStrength(  self : Pin, in_strength : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .current_set, true, self.pin, in_strength, null );
+        _ = try self.gpio.doCmd( .current_set, true, self.num, in_strength, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1900,7 +1920,7 @@ pub const Pin = struct
 
     pub fn getPadStrength(  self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .current_get, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .current_get, true, self.num, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1916,7 +1936,7 @@ pub const Pin = struct
 
     pub fn setGlitchFilter(  self : Pin, in_steady : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .glitch_filter, true, self.pin, in_steady, null );
+        _ = try self.gpio.doCmd( .glitch_filter, true, self.num, in_steady, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1938,7 +1958,7 @@ pub const Pin = struct
     {
         const ext = [_]Extent{ extentFrom( u32, &in_active ) };
 
-        _ = try self.gpio.doCmd( .noise_filter, true, self.pin, in_steady,
+        _ = try self.gpio.doCmd( .noise_filter, true, self.num, in_steady,
                                  in_active,
                                  &ext );
     }
@@ -1954,7 +1974,7 @@ pub const Pin = struct
     {
         _ = try self.gpio.doCmd( .pwm_freq_set,
                                  true,
-                                 self.pin,
+                                 self.num,
                                  in_frequency,
                                  null );
     }
@@ -1966,7 +1986,7 @@ pub const Pin = struct
 
     pub fn getPWMFrequency( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .pwm_freq_get, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_freq_get, true, self.num, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1977,7 +1997,7 @@ pub const Pin = struct
 
     pub fn setPWMRange( self : Pin, in_range : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .pwm_rate_set, true, self.pin, in_range, null );
+        _ = try self.gpio.doCmd( .pwm_rate_set, true, self.num, in_range, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1987,7 +2007,7 @@ pub const Pin = struct
 
     pub fn getPWMRange( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .pwm_rate_get, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_rate_get, true, self.num, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -1997,7 +2017,7 @@ pub const Pin = struct
 
     pub fn getPWMRealRange( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .pwm_real_range, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_real_range, true, self.num, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -2009,7 +2029,7 @@ pub const Pin = struct
 
     pub fn setPWMDutyCycle( self : Pin, in_duty_cycle: u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .pwm_duty_set, true, self.pin, in_duty_cycle, null );
+        _ = try self.gpio.doCmd( .pwm_duty_set, true, self.num, in_duty_cycle, null );
     }
 
     // -------------------------------------------------------------------------
@@ -2019,7 +2039,7 @@ pub const Pin = struct
 
     pub fn getPWMDutyCycle( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .pwm_duty_get, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .pwm_duty_get, true, self.num, 0, null );
     }
 
     // -------------------------------------------------------------------------
@@ -2071,7 +2091,7 @@ pub const Pin = struct
 
     pub fn setServoPulseWidth( self : Pin, in_width : u32 ) Error!void
     {
-        _ = try self.gpio.doCmd( .servo_set, true, self.pin, in_width, null );
+        _ = try self.gpio.doCmd( .servo_set, true, self.num, in_width, null );
     }
 
     // -------------------------------------------------------------------------
@@ -2081,7 +2101,7 @@ pub const Pin = struct
 
     pub fn getServoPulseWidth( self : Pin ) Error!u32
     {
-        return try self.gpio.doCmd( .servo_get, true, self.pin, 0, null );
+        return try self.gpio.doCmd( .servo_get, true, self.num, 0, null );
     }
 
     // ==== Pin Callback Setup =================================================
@@ -2097,14 +2117,14 @@ pub const Pin = struct
                              in_func    : LevelCBFunc,
                              in_context : ?*anyopaque )!void
     {
-        if (self.pin > 31) return error.bad_user_gpio;
+        if (self.num > 31) return error.bad_user_gpio;
 
         // We cannot set a callback on the .timeout value.  Use the
         // watchdog command instead.
 
         std.debug.assert( in_edge != .timeout );
 
-        try self.gpio.addLevelCallback( @intCast( self.pin ),
+        try self.gpio.addLevelCallback( @intCast( self.num ),
                                         in_edge,
                                         in_func,
                                         in_context );
@@ -2121,9 +2141,9 @@ pub const Pin = struct
                                 in_func    : LevelCBFunc,
                                 in_context : ?*anyopaque ) void
     {
-        if (self.pin > 31) return;
+        if (self.num > 31) return;
 
-        self.gpio.removeLevelCallback( @intCast( self.pin ),
+        self.gpio.removeLevelCallback( @intCast( self.num ),
                                        in_edge,
                                        in_func,
                                        in_context );
@@ -2138,7 +2158,7 @@ pub const Pin = struct
     {
         return try self.gpio.doCmd( .wdog_set,
                                     true,
-                                    self.pin,
+                                    self.num,
                                     in_timeout,
                                     null ) != 0;
     }
@@ -2153,9 +2173,8 @@ pub const Pin = struct
 
 pub const SPI = struct
 {
-    gpio      : ?*PiGPIO           = null,
-    spi       : u32                = 0,
-    allocator : std.mem.Allocator  = undefined,
+    gpio      : *PiGPIO,
+    id        : u32     = 0xFFFF_FFFF,
 
     pub const Flags = packed struct
     {
@@ -2225,23 +2244,19 @@ pub const SPI = struct
     // ### TODO ### document SPI flag bits.
 
     pub fn open( self         : *SPI,
-                 in_gpio      : *PiGPIO,
-                 in_allocator : std.mem.Allocator,
                  in_channel   : u2,
                  in_bit_rate  : u32,
-                 in_flags     : Flags ) (SPIError||error{OutOfMemory})!void
+                 in_flags     : Flags ) Error!void
     {
         self.close(); // will do nothing if SPI not already open.
 
         const ext = [_]Extent{ extentFrom( u32, @ptrCast( &in_flags ) ) };
 
-        self.spi  = try in_gpio.doCmd( .spi_open,
-                                       true,
-                                       in_channel,
-                                       in_bit_rate,
-                                       &ext );
-        self.allocator = in_allocator;
-        self.gpio      = in_gpio;
+        self.id  = try self.gpio.doCmd( .spi_open,
+                                        true,
+                                        in_channel,
+                                        in_bit_rate,
+                                        &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2251,15 +2266,9 @@ pub const SPI = struct
 
     pub fn close( self : *SPI ) void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = gpio.doCmd( .spi_close, true, self.spi, 0, null ) catch |err|
-            {
-                log.warn( "SPI Deinit error (ignored): {}", .{ err } );
-            };
+        _ = self.gpio.doCmd( .spi_close, true, self.id, 0, null ) catch {};
 
-            self.gpio = null;
-        }
+        self.id = 0xFFFF_FFFF;
     }
 
     // -------------------------------------------------------------------------
@@ -2271,26 +2280,19 @@ pub const SPI = struct
     /// Note: the SPI bus sends zeros when reading data.
 
     pub fn read( self         : SPI,
-                 out_rx_slice : []u8 ) SPIError!void
+                 out_rx_slice : []u8 ) Error!void
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .spi_read,
-                                false,
-                                self.spi,
-                                @intCast( out_rx_slice.len ),
-                                null );
+        _ = try self.gpio.doCmd( .spi_read,
+                                 false,
+                                 self.id,
+                                 @intCast( out_rx_slice.len ),
+                                 null );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
-        }
-        else
-        {
-            return error.NotOpen;
-        }
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
     }
 
     // -------------------------------------------------------------------------
@@ -2302,20 +2304,13 @@ pub const SPI = struct
     /// Note: any data received on the SPI bus during the write is ignored.
 
     pub fn write( self        : SPI,
-                  in_tx_slice : [] const u8 ) SPIError!void
+                  in_tx_slice : [] const u8 ) Error!void
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
 
         const ext = [_]Extent{ in_tx_slice };
 
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .spi_write, true, self.spi,  0, &ext );
-        }
-        else
-        {
-            return error.NotOpen;
-        }
+        _ = try self.gpio.doCmd( .spi_write, true, self.id,  0, &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2330,25 +2325,18 @@ pub const SPI = struct
 
     pub fn transfer( self          : SPI,
                      in_tx_slice   : [] const u8,
-                     out_rx_slice  : []u8 ) SPIError!void
+                     out_rx_slice  : []u8 ) Error!void
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
 
         const ext = [_]Extent{ in_tx_slice };
 
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .spi_trasfer, false, self.spi, 0, &ext );
+        _ = try self.gpio.doCmd( .spi_trasfer, false, self.id, 0, &ext );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
-        }
-        else
-        {
-            return error.NotOpen;
-        }
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
     }
 };
 
@@ -2358,9 +2346,8 @@ pub const SPI = struct
 
 pub const I2C = struct
 {
-    gpio      : ?*PiGPIO           = null,
-    i2c       : u32                = 0,
-    allocator : std.mem.Allocator  = undefined,
+    gpio      : *PiGPIO,
+    id        : u32     = 0xFFFF_FFFF,
 
     // -------------------------------------------------------------------------
     //  Public Function: I2C.open
@@ -2379,22 +2366,18 @@ pub const I2C = struct
     // ### TODO ### document SPI flag bits.
 
     pub fn open( self         : *I2C,
-                 in_gpio      : *PiGPIO,
-                 in_allocator : std.mem.Allocator,
                  in_interface : u1,
-                 in_address   : u7 ) (SPIError||error{OutOfMemory})!void
+                 in_address   : u7 ) (Error||error{OutOfMemory})!void
     {
         self.close(); // will do nothing if I2C not already open.
 
         const zero : u32 = 0;
         const ext = [_]Extent{ extentFrom( u32, &zero ) };
 
-        self.i2c  = try in_gpio.doCmd( .i2c_open, true,
-                                       in_interface,
-                                       in_address,
-                                       &ext );
-        self.allocator = in_allocator;
-        self.gpio      = in_gpio;
+        self.id  = try self.gpio.doCmd( .i2c_open, true,
+                                        in_interface,
+                                        in_address,
+                                        &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2404,15 +2387,9 @@ pub const I2C = struct
 
     pub fn close( self : *I2C ) void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = gpio.doCmd( .i2c_close, true, self.i2c, 0, null ) catch |err|
-            {
-                log.warn( "I2C Deinit error (ignored): {}", .{ err } );
-            };
+        _ = self.gpio.doCmd( .i2c_close, true, self.id, 0, null ) catch {};
 
-            self.gpio = null;
-        }
+        self.id = 0xFFFF_FFFF;
     }
 
     // -------------------------------------------------------------------------
@@ -2422,26 +2399,21 @@ pub const I2C = struct
     /// slice.
 
     pub fn readRaw( self         : I2C,
-                    out_rx_slice : []u8 ) I2CError!u32
+                    out_rx_slice : []u8 ) Error!u32
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const result = try gpio.doCmd( .i2c_rx_raw,
-                                           false,
-                                           self.i2c,
-                                           @intCast( out_rx_slice.len ),
-                                           null );
+        const result = try self.gpio.doCmd( .i2c_rx_raw,
+                                            false,
+                                            self.id,
+                                            @intCast( out_rx_slice.len ),
+                                            null );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 
     // -------------------------------------------------------------------------
@@ -2450,19 +2422,13 @@ pub const I2C = struct
     /// This function transmits raw over an I2C bus.
 
     pub fn writeRaw( self        : I2C,
-                     in_tx_slice : [] const u8 ) I2CError!void
+                     in_tx_slice : [] const u8 ) Error!void
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
 
         const ext = [_]Extent{ in_tx_slice };
 
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .i2c_tx_raw, true, self.i2c,  0, &ext );
-            return;
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_raw, true, self.id,  0, &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2473,14 +2439,9 @@ pub const I2C = struct
     /// transfer of a single bit of data to the slave
 
     pub fn writeQuick( self         : I2C,
-                       in_bit       : u1 ) I2CError!void
+                       in_bit       : u1 ) Error!void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .i2c_tx_quick, true, self.i2c, in_bit, null );
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_quick, true, self.id, in_bit, null );
     }
 
     // -------------------------------------------------------------------------
@@ -2489,14 +2450,9 @@ pub const I2C = struct
     /// This sends a single byte to the slave
 
     pub fn writeByte( self         : I2C,
-                      in_byte      : u8 ) I2CError!void
+                      in_byte      : u8 ) Error!void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .i2c_tx_raw_u8, true, self.i2c, in_byte, null );
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_raw_u8, true, self.id, in_byte, null );
     }
 
     // -------------------------------------------------------------------------
@@ -2504,18 +2460,13 @@ pub const I2C = struct
     // -------------------------------------------------------------------------
     /// This reads a single byte from the slave
 
-    pub fn readByte( self : I2C) I2CError!u8
+    pub fn readByte( self : I2C) Error!u8
     {
-        if (self.gpio) |gpio|
-        {
-            return @intCast( try gpio.doCmd( .i2c_rx_raw_u8,
-                                             true,
-                                             self.i2c,
-                                             0,
-                                             null ) & 0xFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( try self.gpio.doCmd( .i2c_rx_raw_u8,
+                                              true,
+                                              self.id,
+                                              0,
+                                              null ) & 0xFF );
     }
 
     // -------------------------------------------------------------------------
@@ -2525,17 +2476,12 @@ pub const I2C = struct
 
     pub fn writeByteData( self         : I2C,
                           in_register  : u8,
-                          in_byte      : u8 ) I2CError!void
+                          in_byte      : u8 ) Error!void
     {
-        if (self.gpio) |gpio|
-        {
-            const data : u32 = in_byte;
-            const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
+        const data : u32 = in_byte;
+        const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
 
-            _ = try gpio.doCmd( .i2c_tx_u8, true, self.i2c, in_register, &ext );
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_u8, true, self.id, in_register, &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2543,18 +2489,13 @@ pub const I2C = struct
     // -------------------------------------------------------------------------
     /// This reads a single byte from the slave
 
-    pub fn readByteData( self : I2C, in_register : u8 ) I2CError!u8
+    pub fn readByteData( self : I2C, in_register : u8 ) Error!u8
     {
-        if (self.gpio) |gpio|
-        {
-            return @intCast( try gpio.doCmd( .i2c_rx_u8,
-                                             true,
-                                             self.i2c,
-                                             in_register,
-                                             null ) & 0xFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( try self.gpio.doCmd( .i2c_rx_u8,
+                                              true,
+                                              self.id,
+                                              in_register,
+                                              null ) & 0xFF );
     }
 
     // -------------------------------------------------------------------------
@@ -2564,17 +2505,12 @@ pub const I2C = struct
 
     pub fn writeWordData( self         : I2C,
                           in_register  : u8,
-                          in_word      : u16 ) I2CError!void
+                          in_word      : u16 ) Error!void
     {
-        if (self.gpio) |gpio|
-        {
-            const data : u32 = in_word;
-            const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
+        const data : u32 = in_word;
+        const ext = [_]Extent{ extentFrom( u32, @ptrCast( &data ) ) };
 
-            _ = try gpio.doCmd( .i2c_tx_u16, true, self.i2c, in_register, &ext );
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_u16, true, self.id, in_register, &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2582,18 +2518,13 @@ pub const I2C = struct
     // -------------------------------------------------------------------------
     /// This reads a bit word from the slave
 
-    pub fn readWordData( self : I2C, in_register : u8 ) I2CError!u16
+    pub fn readWordData( self : I2C, in_register : u8 ) Error!u16
     {
-        if (self.gpio) |gpio|
-        {
-            return @intCast( try gpio.doCmd( .i2c_rx_u16,
-                                             true,
-                                             self.i2c,
-                                             in_register,
-                                             null ) & 0xFFFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( try self.gpio.doCmd( .i2c_rx_u16,
+                                              true,
+                                              self.id,
+                                              in_register,
+                                              null ) & 0xFFFF );
     }
 
     // -------------------------------------------------------------------------
@@ -2603,23 +2534,18 @@ pub const I2C = struct
 
     pub fn writeBlockData( self         : I2C,
                            in_register  : u8,
-                           in_tx_slice  : [] const u8 ) I2CError!void
+                           in_tx_slice  : [] const u8 ) Error!void
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const len : u32 = @intCast( in_tx_slice.len );
-            const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
+        const len : u32 = @intCast( in_tx_slice.len );
+        const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
 
-            _ = try gpio.doCmd( .i2c_tx_block,
-                                false,
-                                self.i2c,
-                                in_register,
-                                &ext );
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_block,
+                                 false,
+                                 self.id,
+                                 in_register,
+                                 &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2629,28 +2555,23 @@ pub const I2C = struct
 
     pub fn readBlockData( self         : I2C,
                           in_register  : u8,
-                          out_rx_slice : []u8 ) I2CError!u32
+                          out_rx_slice : []u8 ) Error!u32
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
         const ext = [_]Extent{ out_rx_slice };
 
-        if (self.gpio) |gpio|
-        {
-            const result =  try gpio.doCmd( .i2c_rx_block,
-                                            false,
-                                            self.i2c,
-                                            in_register,
-                                            &ext );
+        const result =  try self.gpio.doCmd( .i2c_rx_block,
+                                             false,
+                                             self.id,
+                                             in_register,
+                                             &ext );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
 
-            return @intCast( result & 0xFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( result & 0xFF );
     }
 
     // -------------------------------------------------------------------------
@@ -2660,23 +2581,18 @@ pub const I2C = struct
 
     pub fn writeI2CBlockData( self         : I2C,
                               in_register  : u8,
-                              in_tx_slice  : [] const u8 ) I2CError!void
+                              in_tx_slice  : [] const u8 ) Error!void
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const len : u32 = @intCast( in_tx_slice.len );
-            const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
+        const len : u32 = @intCast( in_tx_slice.len );
+        const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
 
-            _ = try gpio.doCmd( .i2c_tx_i2c_blk,
-                                false,
-                                self.i2c,
-                                in_register,
-                                &ext );
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .i2c_tx_i2c_blk,
+                                 false,
+                                 self.id,
+                                 in_register,
+                                 &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2686,26 +2602,21 @@ pub const I2C = struct
 
     pub fn readI2CBlockData( self         : I2C,
                              in_register  : u8,
-                             out_rx_slice : []u8 ) I2CError!u32
+                             out_rx_slice : []u8 ) Error!u32
     {
         std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const result =  try gpio.doCmd( .i2c_rx_i2c_blk,
-                                            false,
-                                            self.i2c,
-                                            in_register,
-                                            null );
+        const result =  try self.gpio.doCmd( .i2c_rx_i2c_blk,
+                                             false,
+                                             self.id,
+                                             in_register,
+                                             null );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
 
-            return @intCast( result & 0xFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( result & 0xFF );
     }
 
     // -------------------------------------------------------------------------
@@ -2715,21 +2626,15 @@ pub const I2C = struct
 
     pub fn procedureCall( self         : I2C,
                           in_register  : u7,
-                          in_value     : u16 ) I2CError!u32
+                          in_value     : u16 ) Error!u32
     {
-        if (self.gpio) |gpio|
-        {
-            const ext = [_]Extent{ extentFrom( u16, &in_value ) };
+        const ext = [_]Extent{ extentFrom( u16, &in_value ) };
 
-
-            return try gpio.doCmd( .i2c_proc_call,
-                                   true,
-                                   self.i2c,
-                                   in_register,
-                                   &ext );
-        }
-
-        return error.NotOpen;
+        return try self.gpio.doCmd( .i2c_proc_call,
+                                    true,
+                                    self.id,
+                                    in_register,
+                                    &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2741,31 +2646,26 @@ pub const I2C = struct
     pub fn blockProcedureCall( self         : I2C,
                                in_register  : u7,
                                in_tx_slice   : [] const u8,
-                               out_rx_slice  : []u8 ) I2CError!u32
+                               out_rx_slice  : []u8 ) Error!u32
     {
         std.debug.assert( in_tx_slice.len <= 0xFFFF_FFFF );
         std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
 
-        if (self.gpio) |gpio|
-        {
-            const len : u32 = @intCast( in_tx_slice.len );
-            const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
+        const len : u32 = @intCast( in_tx_slice.len );
+        const ext = [_]Extent{ extentFrom( u32, &len ), in_tx_slice };
 
 
-            const result =  try gpio.doCmd( .i2c_block_call,
-                                            false,
-                                            self.i2c,
-                                            in_register,
-                                            &ext );
+        const result =  try self.gpio.doCmd( .i2c_block_call,
+                                             false,
+                                             self.id,
+                                             in_register,
+                                             &ext );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 
     // -------------------------------------------------------------------------
@@ -2778,30 +2678,25 @@ pub const I2C = struct
     pub fn zip( self          : I2C,
                 in_register   : u7,
                 in_operations : [] const u8,
-                out_rx_slice  : []u8 ) I2CError!u32
+                out_rx_slice  : []u8 ) Error!u32
     {
         std.debug.assert( in_operations.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const len : u32 = @intCast( in_operations.len );
-            const ext = [_]Extent{ extentFrom( u32, &len ), in_operations };
+        const len : u32 = @intCast( in_operations.len );
+        const ext = [_]Extent{ extentFrom( u32, &len ), in_operations };
 
 
-            const result =  try gpio.doCmd( .i2c_zip,
-                                            false,
-                                            self.i2c,
-                                            in_register,
-                                            &ext );
+        const result =  try self.gpio.doCmd( .i2c_zip,
+                                             false,
+                                             self.id,
+                                             in_register,
+                                             &ext );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_rx_slice );
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 };
 
@@ -2811,8 +2706,8 @@ pub const I2C = struct
 
 pub const Serial = struct
 {
-    gpio      : ?*PiGPIO           = null,
-    serial    : u32                = 0,
+    gpio  : *PiGPIO,
+    id    : u32  = 0xFFFF_FFFF,
 
     // -------------------------------------------------------------------------
     //  Public Function: Serial.open
@@ -2829,7 +2724,6 @@ pub const Serial = struct
     /// 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200, or 230400.
 
     pub fn open( self         : *Serial,
-                 in_gpio      : *PiGPIO,
                  in_interface : [] const u8,
                  in_bit_rate  : u32,
                  in_flags     : u32 ) !void
@@ -2856,13 +2750,11 @@ pub const Serial = struct
 
         const ext = [_]Extent{ in_interface };
 
-        self.serial = try in_gpio.doCmd( .ser_open,
-                                         true,
-                                         in_bit_rate,
-                                         in_flags,
-                                         &ext );
-
-        self.gpio      = in_gpio;
+        self.id = try self.gpio.doCmd( .ser_open,
+                                       true,
+                                       in_bit_rate,
+                                       in_flags,
+                                       &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -2871,121 +2763,86 @@ pub const Serial = struct
 
     pub fn close( self : *Serial ) void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = gpio.doCmd( .ser_close, true, self.serial, 0, null ) catch |err|
-            {
-                log.warn( "Serial close error (ignored): {}", .{ err } );
-            };
+        _ = self.gpio.doCmd( .ser_close, true, self.id, 0, null ) catch {};
 
-            self.gpio = null;
-        }
+        self.id = 0xFFFF_FFFF;
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: Serial.readByte
     // -------------------------------------------------------------------------
 
-    pub fn readByte( self : *Serial ) !u8
+    pub fn readByte( self : *Serial ) Error!u8
     {
-        if (self.gpio) |gpio|
-        {
-            return @intCast( try gpio.doCmd( .ser_read_byte,
-                                             true,
-                                             self.serial,
-                                             0,
-                                             null ) & 0xFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( try self.gpio.doCmd( .ser_read_byte,
+                                              true,
+                                              self.id,
+                                              0,
+                                              null ) & 0xFF );
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: Serial.writeByte
     // -------------------------------------------------------------------------
 
-    pub fn writeByte( self : *Serial, in_char : u8 ) !void
+    pub fn writeByte( self : *Serial, in_char : u8 ) Error!void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .ser_write_byte,
-                                true,
-                                self.serial,
-                                in_char,
-                                null );
-
-            return;
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .ser_write_byte,
+                                 true,
+                                 self.id,
+                                 in_char,
+                                 null );
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: Serial.read
     // -------------------------------------------------------------------------
 
-    pub fn read( self : *Serial, out_data : [] u8 ) !u32
+    pub fn read( self : *Serial, out_data : [] u8 ) Error!u32
     {
         std.debug.assert( out_data.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const result = try gpio.doCmd( .ser_read,
-                                           false,
-                                           self.serial,
-                                           @intCast( out_data.len ),
-                                           null );
+        const result = try self.gpio.doCmd( .ser_read,
+                                            false,
+                                            self.id,
+                                            @intCast( out_data.len ),
+                                            null );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_data );
+        _ = try self.gpio.cmd_stream.read( out_data );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: Serial.write
     // -------------------------------------------------------------------------
 
-    pub fn write( self : *Serial, in_data : [] const u8 ) !void
+    pub fn write( self : *Serial, in_data : [] const u8 ) Error!void
     {
         std.debug.assert( in_data.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const ext = [_]Extent{ in_data };
+        const ext = [_]Extent{ in_data };
 
-            _ = try gpio.doCmd( .ser_write,
-                                true,
-                                self.serial,
-                                0,
-                                &ext );
-
-            return;
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .ser_write,
+                                 true,
+                                 self.id,
+                                 0,
+                                 &ext );
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: Serial.dataAvailable
     // -------------------------------------------------------------------------
 
-    pub fn dataAvailable( self : *Serial ) !u32
+    pub fn dataAvailable( self : *Serial ) Error!u32
     {
-        if (self.gpio) |gpio|
-        {
-            return @intCast( try gpio.doCmd( .ser_data_avail,
-                                             true,
-                                             self.serial,
-                                             0,
-                                             null ) & 0xFF );
-        }
-
-        return error.NotOpen;
+        return @intCast( try self.gpio.doCmd( .ser_data_avail,
+                                              true,
+                                              self.id,
+                                              0,
+                                              null ) & 0xFF );
     }
 };
 
@@ -2995,8 +2852,8 @@ pub const Serial = struct
 
 pub const BitBangSerial = struct
 {
-    gpio      : ?*PiGPIO           = null,
-    serial    : u32                = 0,
+    gpio  : *PiGPIO,
+    id    : u32     = 0xFFFF_FFFF,
 
     // -------------------------------------------------------------------------
     //  Public Function: BitBangSerial.open
@@ -3012,11 +2869,10 @@ pub const BitBangSerial = struct
     /// The valid bit rates are:  50, 75, 110, 134, 150, 200, 300, 600, 1200,
     /// 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200, or 230400.
 
-    pub fn open( self         : *Serial,
-                 in_gpio      : *PiGPIO,
+    pub fn open( self         : *BitBangSerial,
                  in_interface : [] const u8,
                  in_bit_rate  : u32,
-                 in_bits      : u6 ) !void
+                 in_bits      : u6 ) Error!void
     {
         std.debug.assert( in_bits >= 1  and  in_bits <= 32 );
         std.debug.assert( in_bit_rate >= 50  and  in_bit_rate <= 250_000 );
@@ -3025,13 +2881,11 @@ pub const BitBangSerial = struct
 
         const ext = [_]Extent{ in_interface };
 
-        self.serial = try in_gpio.doCmd( .bbser_open,
-                                         true,
-                                         in_bit_rate,
-                                         in_bits,
-                                         &ext );
-
-        self.gpio      = in_gpio;
+        self.id = try self.gpio.doCmd( .bbser_open,
+                                           true,
+                                           in_bit_rate,
+                                           in_bits,
+                                           &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -3040,64 +2894,43 @@ pub const BitBangSerial = struct
 
     pub fn close( self : *Serial ) void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = gpio.doCmd( .bbser_close,
-                            true,
-                            self.serial,
-                            0,
-                            null ) catch |err|
-            {
-                log.warn( "BB Serial close error (ignored): {}", .{ err } );
-            };
+        _ = self.gpio.doCmd( .bbser_close, true, self.id, 0, null ) {};
 
-            self.gpio = null;
-        }
+        self.id = 0xFFFF_FFFF;
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: BitBangSerial.read
     // -------------------------------------------------------------------------
 
-    pub fn read( self : *Serial, out_data : [] u8 ) !u32
+    pub fn read( self : *Serial, out_data : [] u8 ) Error!u32
     {
         std.debug.assert( out_data.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const result = try gpio.doCmd( .ser_read,
-                                           false,
-                                           self.serial,
-                                           @intCast( out_data.len ),
-                                           null );
+        const result = try self.gpio.doCmd( .ser_read,
+                                            false,
+                                            self.id,
+                                            @intCast( out_data.len ),
+                                            null );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_data );
+        _ = try self.gpio.cmd_stream.read( out_data );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: BitBangSerial.invert
     // -------------------------------------------------------------------------
 
-    pub fn invert( self : *Serial, in_invert : bool ) !void
+    pub fn invert( self : *Serial, in_invert : bool ) Error!void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .bbser_invert,
-                                true,
-                                self.serial,
-                                @intFromBool( in_invert ),
-                                null );
-            return;
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .bbser_invert,
+                                 true,
+                                 self.id,
+                                 @intFromBool( in_invert ),
+                                 null );
     }
 };
 
@@ -3107,8 +2940,8 @@ pub const BitBangSerial = struct
 
 pub const File = struct
 {
-    gpio    : ?*PiGPIO  = null,
-    file    : u32       = 0,
+    gpio : *PiGPIO,
+    id   : u32       = 0xFFFF_FFFF,
 
     pub const READ   : u5 = 0x01;
     pub const WRITE  : u5 = 0x02;
@@ -3128,18 +2961,16 @@ pub const File = struct
     //  Public Function: File.open
     // -------------------------------------------------------------------------
 
-    pub fn open( self         : *Serial,
-                 in_gpio      : *PiGPIO,
+    pub fn open( self         : *File,
                  in_name      : [] const u8,
-                 in_mode      : u5 ) !void
+                 in_mode      : u5 ) Error!void
     {
         self.close();
 
         const ext = [_]Extent{ in_name };
 
-        self.file = try in_gpio.doCmd( .file_open, true, in_mode, 0, &ext );
+        self.id = try self.gpio.doCmd( .file_open, true, in_mode, 0, &ext );
 
-        self.gpio = in_gpio;
     }
 
     // -------------------------------------------------------------------------
@@ -3148,79 +2979,59 @@ pub const File = struct
 
     pub fn close( self : *File ) void
     {
-        if (self.gpio) |gpio|
-        {
-            _ = gpio.doCmd( .file_close, true, self.file, 0, null );
-        }
+        _ = self.gpio.doCmd( .file_close, true, self.id, 0, null ) catch {};
 
-        self.gpio = null;
+        self.id = 0xFFFF_FFFF;
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: File.read
     // -------------------------------------------------------------------------
 
-    pub fn read( self : *File, out_data : []u8 ) !u32
+    pub fn read( self : *File, out_data : []u8 ) Error!u32
     {
         std.debug.assert( out_data.len <= 0xFFFF_FFFF );
 
-        if (self.gpio) |gpio|
-        {
-            const result = try gpio.doCmd( .file_read,
-                                           false,
-                                           self.file,
-                                           @intCast( out_data.len ),
-                                           null );
+        const result = try self.gpio.doCmd( .file_read,
+                                            false,
+                                            self.id,
+                                            @intCast( out_data.len ),
+                                            null );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_data );
+        _ = try self.gpio.cmd_stream.read( out_data );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: File.write
     // -------------------------------------------------------------------------
 
-    pub fn write( self : *File, in_data : [] const u8 ) !void
+    pub fn write( self : *File, in_data : [] const u8 ) Error!void
     {
         std.debug.assert( in_data.len <= 0xFFFF_FFFF );
 
         const ext = [_]Extent{ in_data };
 
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .file_write, true, self.file, 0, &ext );
-            return;
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .file_write, true, self.id, 0, &ext );
     }
 
     // -------------------------------------------------------------------------
     //  Public Function: File.seek
     // -------------------------------------------------------------------------
 
-    pub fn seek( self : *File, in_position : i32, in_from : From ) !void
+    pub fn seek( self : *File, in_position : i32, in_from : From ) Error!void
     {
-        const val : u32 = @intFromBool( in_from );
+        const val : u32 = @intFromEnum( in_from );
         const ext = [_]Extent{ extentFrom( u32, &val ) };
 
-        if (self.gpio) |gpio|
-        {
-            _ = try gpio.doCmd( .file_seek,
-                                true,
-                                self.file,
-                                @bitCast( in_position ),
-                                &ext );
-            return;
-        }
-
-        return error.NotOpen;
+        _ = try self.gpio.doCmd( .file_seek,
+                                 true,
+                                 self.id,
+                                 @bitCast( in_position ),
+                                 &ext );
     }
 
     // -------------------------------------------------------------------------
@@ -3229,29 +3040,24 @@ pub const File = struct
 
     pub fn list( self       : *File,
                  in_pattern : [] const u8,
-                 out_result : []u8 ) !u32
+                 out_result : []u8 ) Error!u32
     {
         std.debug.assert( in_pattern.len <= 0xFFFF_FFFF );
         std.debug.assert( out_result.len <= 0xFFFF_FFFF );
 
         const ext = [_]Extent{ in_pattern };
 
-        if (self.gpio) |gpio|
-        {
-            const result = try gpio.doCmd( .file_list,
-                                           false,
-                                           @intCast( out_result.len ),
-                                           0,
-                                           &ext );
+        const result = try self.gpio.doCmd( .file_list,
+                                            false,
+                                            @intCast( out_result.len ),
+                                            0,
+                                            &ext );
 
-            defer gpio.cmd_mutex.unlock();
+        defer self.gpio.cmd_mutex.unlock();
 
-            _ = try gpio.cmd_stream.read( out_result );
+        _ = try self.gpio.cmd_stream.read( out_result );
 
-            return result;
-        }
-
-        return error.NotOpen;
+        return result;
     }
 
 };
@@ -3373,60 +3179,117 @@ test "basic pin test"
 
 test "SPI"
 {
-    var gpio : PiGPIO = .{};
-    var spi  : PiGPIO.SPI = .{};
+    var gpio : PiGPIO  = .{};
+    var test_spi       = gpio.spi();
 
     try gpio.connect( testing.allocator, null, null );
     defer gpio.disconnect();
 
-    try spi.open( &gpio, testing.allocator, 0, 6_000_000, .{} );
-    defer spi.close();
+    try test_spi.open( 0, 6_000_000, .{} );
+    defer test_spi.close();
 
     var  buffer : [32]u8 = .{ 0 } ** 32;
 
-    try spi.read( &buffer );
-    try spi.write( &buffer );
-    try spi.transfer( &buffer, &buffer );
+    try test_spi.read( &buffer );
+    try test_spi.write( &buffer );
+    try test_spi.transfer( &buffer, &buffer );
 }
 
 // -----------------------------------------------------------------------------
 
 test "I2C"
 {
-    var gpio : PiGPIO     = .{};
-    var i2c  : PiGPIO.I2C = .{};
+    var gpio : PiGPIO   = .{};
+    var test_i2c        = gpio.i2c();
 
     try gpio.connect( testing.allocator, null, null );
     defer gpio.disconnect();
 
-    try i2c.open( &gpio, testing.allocator, 0, 0x42 );
-    defer i2c.close();
+    try test_i2c.open( 0, 0x42 );
+    defer test_i2c.close();
 
     var  buffer : [32]u8 = .{ 0 } ** 32;
 
-    try i2c.writeRaw( &buffer );
-    _ = try i2c.readRaw( &buffer );
+    try test_i2c.writeRaw( &buffer );
+    _ = try test_i2c.readRaw( &buffer );
 
-    try i2c.writeQuick( 0x01 );
+    try test_i2c.writeQuick( 0x01 );
 
-    try i2c.writeByte( 0xCD );
-    _ = try i2c.readByte();
+    try test_i2c.writeByte( 0xCD );
+    _ = try test_i2c.readByte();
 
-    try i2c.writeByteData( 1, 0xCD );
-    _ = try i2c.readByteData( 1 );
+    try test_i2c.writeByteData( 1, 0xCD );
+    _ = try test_i2c.readByteData( 1 );
 
-    try i2c.writeWordData( 1, 0xABCD );
-    _ = try i2c.readWordData( 1 );
+    try test_i2c.writeWordData( 1, 0xABCD );
+    _ = try test_i2c.readWordData( 1 );
 
-    try i2c.writeBlockData( 1, &buffer );
-    _ = try i2c.readBlockData( 1, &buffer );
+    try test_i2c.writeBlockData( 1, &buffer );
+    _ = try test_i2c.readBlockData( 1, &buffer );
 
-    try i2c.writeI2CBlockData( 1, &buffer );
-    _ = try i2c.readI2CBlockData( 1, &buffer );
+    try test_i2c.writeI2CBlockData( 1, &buffer );
+    _ = try test_i2c.readI2CBlockData( 1, &buffer );
 
-    _ = try i2c.procedureCall( 1, 42 );
+    _ = try test_i2c.procedureCall( 1, 42 );
 
-    _ = try i2c.blockProcedureCall( 1, &buffer, &buffer );
+    _ = try test_i2c.blockProcedureCall( 1, &buffer, &buffer );
+}
+
+// -----------------------------------------------------------------------------
+
+test "Serial Functions"
+{
+    var gpio   : PiGPIO   = .{};
+    var test_ser          = gpio.serial();
+    // var buffer : [15]u8        = undefined;
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try test_ser.open( "/dev/ttyUSB0", 9600, 0 );
+    defer test_ser.close();
+
+    try test_ser.writeByte( 'x' );
+    try test_ser.write( "This is a test\n" );
+
+    var   avail  = try test_ser.dataAvailable();
+    const a_char = test_ser.readByte();
+
+    if (avail == 0)
+    {
+        try testing.expectError( error.ser_read_no_data, a_char );
+    }
+    else
+    {
+        log.info( "Byte read: {!}", .{ a_char } );
+    }
+
+    avail = try test_ser.dataAvailable();
+
+    // try testing.expectEqual( avail, try test_ser.read( &buffer ) );
+}
+
+// -----------------------------------------------------------------------------
+
+test "File Functions"
+{
+    var gpio      : PiGPIO   = .{};
+    var test_file            = gpio.file();
+    var buffer    : [64]u8   = undefined;
+
+    try gpio.connect( testing.allocator, null, null );
+    defer gpio.disconnect();
+
+    try test_file.open( "test.file", File.READ );
+    defer test_file.close();
+
+    try test_file.write( "test data" );
+
+    try test_file.seek( 0, .start );
+
+    _ = try test_file.read( &buffer );
+
+    _ = try test_file.list( "test.*", &buffer );
 }
 
 // -----------------------------------------------------------------------------
@@ -3513,61 +3376,4 @@ test "Event Callback"
 
     try testing.expectEqual( 13, result );
 
-}
-
-// -----------------------------------------------------------------------------
-
-test "Serial Functions"
-{
-    var gpio   : PiGPIO        = .{};
-    var serial : PiGPIO.Serial = .{};
-    // var buffer : [15]u8        = undefined;
-
-    try gpio.connect( testing.allocator, null, null );
-    defer gpio.disconnect();
-
-    try serial.open( &gpio, "/dev/ttyUSB0", 9600, 0 );
-    defer serial.close();
-
-    try serial.writeByte( 'x' );
-    try serial.write( "This is a test\n" );
-
-    var   avail  = try serial.dataAvailable();
-    const a_char = serial.readByte();
-
-    if (avail == 0)
-    {
-        try testing.expectError( error.ser_read_no_data, a_char );
-    }
-    else
-    {
-        log.info( "Byte read: {!}", .{ a_char } );
-    }
-
-    avail = try serial.dataAvailable();
-
-    // try testing.expectEqual( avail, try serial.read( &buffer ) );
-}
-
-// -----------------------------------------------------------------------------
-
-test "File Functions"
-{
-    var gpio   : PiGPIO      = .{};
-    var file   : PiGPIO.File = .{};
-    var buffer : [64]u8      = undefined;
-
-    try gpio.connect( testing.allocator, null, null );
-    defer gpio.disconnect();
-
-    try file.open( &gpio, "test.file", File.READ );
-    defer file.close();
-
-    try file.write( "test data" );
-
-    try file.seek( 0, .start );
-
-    _ = try file.read( &buffer );
-
-    _ = try file.list( "test.*", &buffer );
 }
