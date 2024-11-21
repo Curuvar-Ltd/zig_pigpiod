@@ -29,13 +29,11 @@ pub fn build( b: * std.Build ) void
       .optimize         = optimize,
   });
 
-  // Add "pigpio" (from build.zig.zon) as an importable dependency.
+  // Add "zpigpio" (from build.zig.zon) as an importable dependency.
 
-  const pigpio_dep = b.dependency( "pigpio", .{} );
+  const zpigpio =  b.dependency( "zpigpio", .{} ).module( "ZPIGPIO" );
 
-  const pigpio = pigpio_dep.module( "PiGPIO" );
-
-  exe.root_module.addImport( "PiGPIO", pigpio );
+  exe.root_module.addImport( "ZPIGPIO", zpigpio );
 
   // Indicate that his application should be installed in the final
   // installation directory.

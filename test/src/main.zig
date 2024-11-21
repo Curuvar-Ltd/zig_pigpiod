@@ -1,14 +1,12 @@
 
 const std          = @import( "std" );
-const PiGPIO       = @import( "PiGPIO" );
+const GPIO         = @import( "ZPIGPIO" );
 
 var   gpa          = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator    = gpa.allocator();
 
-var gpio : PiGPIO  = .{};
-
-
-const pin3 = gpio.pin( 3 );
+var   gpio : GPIO  = .{};
+const pin3         = gpio.pin( 3 );
 
 pub fn main() !void
 {

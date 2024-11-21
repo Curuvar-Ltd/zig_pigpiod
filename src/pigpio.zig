@@ -309,6 +309,36 @@ pub const Edge = enum(u8)
 };
 
 // -----------------------------------------------------------------------------
+/// SPI Flags
+
+pub const SPI_Flags = packed struct(u32)
+{
+    /// SPI mode select
+    mode         : u2       = 0,
+    /// Set true to make CS active high
+    cs0_invert   : bool     = false,
+    cs1_invert   : bool     = false,
+    cs2_invert   : bool     = false,
+    /// Set true to inhibit the chip select line
+    cs0_inhibit  : bool     = false,
+    cs1_inhibit  : bool     = false,
+    cs2_inhibit  : bool     = false,
+    /// Set true to select the SPI1 interface
+    aux          : bool     = false,
+    /// Select true for 3-wire operation (main interface only)
+    three_wire   : bool     = false,
+    /// Number of pad byte in 3-wire mode
+    pad          : u4       = 0,
+    /// Set true to transmit low order bit first (aux interface only)
+    tx_lsb       : bool     = false,
+    /// Set true to receive low order bif first (aux interface only)
+    rx_lsb       : bool     = false,
+    /// Set SPI word size
+    word_size    : u6       = 0,
+    unused       : u10      = 0,
+};
+
+// -----------------------------------------------------------------------------
 ///  Callback function prototype.
 
 const LevelCBFunc = * const fn ( in_pin     : Pin,
@@ -370,146 +400,156 @@ const EventCallback = struct
 /// Commands supported by pigpiod daemon.
 const Command = enum(u8)
 {
-    mode_set        =   0,
-    mode_get        =   1,
-    pull_set        =   2,
-    pin_get         =   3,
-    pin_set         =   4,
-    pwm_duty_set    =   5,
-    pwm_rate_set    =   6,
-    pwm_freq_set    =   7,
-    servo_set       =   8,
-    wdog_set        =   9,
-    band_read_1     =  10,
-    band_read_2     =  11,
-    band_clear_1    =  12,
-    band_clear_2    =  13,
-    band_set_1      =  14,
-    band_set_2      =  15,
-    tick_get        =  16,
-    hw_ver_get      =  17,
-    NO     = 18,
-    level_bits_set  =  19,
-    NP     = 20,
-    NC     = 21,
-    pwm_rate_get    =  22,
-    pwm_freq_get    =  23,
-    pwm_real_range  =  24,
-    HELP   = 25,
-    version_get     =  26,
-    WVCLR  = 27,
-    WVAG   = 28,
-    WVAS   = 29,
-    WVGO   = 30,
-    WVGOR  = 31,
-    WVBSY  = 32,
-    WVHLT  = 33,
-    WVSM   = 34,
-    WVSP   = 35,
-    WVSC   = 36,
-    pin_trigger     =  37,
-    store_script    =  38,
-    delete_script   =  39,
-    run_script      =  40,
-    stop_script     =  41,
-    bbser_open      =  42,
-    bbser_read      =  43,
-    bbser_close     =  44,
-    script_status   =  45,
-    MICS   = 46,
-    MILS   = 47,
-    PARSE  = 48,
-    WVCRE  = 49,
-    WVDEL  = 50,
-    WVTX   = 51,
-    WVTXR  = 52,
-    WVNEW  = 53,
+    mode_set         =   0,
+    mode_get         =   1,
+    pull_set         =   2,
+    pin_get          =   3,
+    pin_set          =   4,
+    pwm_duty_set     =   5,
+    pwm_rate_set     =   6,
+    pwm_freq_set     =   7,
+    servo_set        =   8,
+    wdog_set         =   9,
+    band_read_1      =  10,
+    band_read_2      =  11,
+    band_clear_1     =  12,
+    band_clear_2     =  13,
+    band_set_1       =  14,
+    band_set_2       =  15,
+    tick_get         =  16,
+    hw_ver_get       =  17,
+//    pipe_ntfy_open   =  18, // Pipe notifications
+    notify_begin     =  19,
+//    pipe_ntfy_pause  =  20, // Pipe notifications
+//    pipe_ntfy_close  =  21, // Pipe notifications
+    pwm_rate_get     =  22,
+    pwm_freq_get     =  23,
+    pwm_real_range   =  24,
+//    HELP             =  25, // Internal use
+    version_get      =  26,
 
-    i2c_open        =  54,
-    i2c_close       =  55,
-    i2c_rx_raw      =  56,
-    i2c_tx_raw      =  57,
-    i2c_tx_quick    =  58,
-    i2c_tx_raw_u8   =  59,
-    i2c_rx_raw_u8   =  60,
-    i2c_rx_u8       =  61,
-    i2c_tx_u8       =  62,
-    i2c_rx_u16      =  63,
-    i2c_tx_u16      =  64,
-    i2c_rx_block    =  65,
-    i2c_tx_block    =  66,
-    i2c_rx_i2c_blk  =  67,
-    i2c_tx_i2c_blk  =  68,
-    i2c_proc_call   =  69,
-    i2c_block_call  =  70,
+    wave_clear       =  27,
+    wave_add_generic =  28,
+    wave_add_serial  =  29,
+//    wave_tx_start    =  30, // DEPRICATED
+//    wave_tx_repeat   =  31, // DEPRICATED
+    wave_tx_busy     =  32,
+    wave_tx_stop     =  33,
+    wave_get_micros  =  34,
+    wave_get_pulses  =  35,
+    wave_get_cbs     =  36,
 
-    spi_open        =  71,
-    spi_close       =  72,
-    spi_read        =  73,
-    spi_write       =  74,
-    spi_trasfer     =  75,
+    pin_trigger      =  37,
 
-    ser_open        =  76,
-    ser_close       =  77,
-    ser_read_byte   =  78,
-    ser_write_byte  =  79,
-    ser_read        =  80,
-    ser_write       =  81,
-    ser_data_avail  =  82,
+    store_script     =  38,
+    delete_script    =  39,
+    run_script       =  40,
+    stop_script      =  41,
 
-    pwm_duty_get    =  83,
-    servo_get       =  84,
+    bbser_open       =  42,
+    bbser_read       =  43,
+    bbser_close      =  44,
 
-    HC     = 85,
-    HP     = 86,
+    script_status    =  45,
 
-    custom_1        =  87,
-    custom_2        =  88,
+//    delay_microsec   =  46,
+//    delay_millisec   =  47,
 
-    BI2CC  = 89,
-    BI2CO  = 90,
-    BI2CZ  = 91,
+//    parse_script     =  48, // Internal ??
 
-    i2c_zip         =  92,
+    wave_create      =  49,
+    wave_send_once   =  51,
 
-    WVCHA  = 93,
 
-    bbser_invert    =  94,
 
-    CGI    = 95,
-    CSI    = 96,
+    wave_send_repeat =  52,
+    wave_add_new     =  53,
 
-    glitch_filter   =  97,
-    noise_filter    =  98,
+    i2c_open         =  54,
+    i2c_close        =  55,
+    i2c_rx_raw       =  56,
+    i2c_tx_raw       =  57,
+    i2c_tx_quick     =  58,
+    i2c_tx_raw_u8    =  59,
+    i2c_rx_raw_u8    =  60,
+    i2c_rx_u8        =  61,
+    i2c_tx_u8        =  62,
+    i2c_rx_u16       =  63,
+    i2c_tx_u16       =  64,
+    i2c_rx_block     =  65,
+    i2c_tx_block     =  66,
+    i2c_rx_i2c_blk   =  67,
+    i2c_tx_i2c_blk   =  68,
+    i2c_proc_call    =  69,
+    i2c_block_call   =  70,
 
-    begin_notify    =  99,  // Inform server that this is the notify stream.
+    spi_open         =  71,
+    spi_close        =  72,
+    spi_read         =  73,
+    spi_write        =  74,
+    spi_trasfer      =  75,
 
-    WVTXM  = 100,
-    WVTAT  = 101,
+    ser_open         =  76,
+    ser_close        =  77,
+    ser_read_byte    =  78,
+    ser_write_byte   =  79,
+    ser_read         =  80,
+    ser_write        =  81,
+    ser_data_avail   =  82,
 
-    current_set     = 102,
-    current_get     = 103,
+    pwm_duty_get     =  83,
+    servo_get        =  84,
 
-    file_open       = 104,
-    file_close      = 105,
-    file_read       = 106,
-    file_write      = 107,
-    file_seek       = 108,
-    file_list       = 109,
+//    hardware_clock   =  85,
+//    hardware_PWM     =  86,
 
-    shell_cmd       = 110,
+    custom_1         =  87,
+    custom_2         =  88,
 
-    BSPIC  = 111,
-    BSPIO  = 112,
-    BSPIX  = 113,
+    bbi2c_close      =  89,
+    bbi2c_open       =  90,
+    bbi2c_trasfer    =  91,
 
-    BSCX   = 114,
+    i2c_zip          =  92,
 
-    events_bits_set = 115,
-    trigger_event   = 116,
+    wave_chain       = 93,
 
-    update_script   = 117,
-    WVCAP  = 118,
+    bbser_invert     =  94,
+
+//   srvr_get_config  =  95,
+//   srvr_set_config  =  96,
+
+    glitch_filter    =  97,
+    noise_filter     =  98,
+
+    begin_notify     =  99,  // Inform server that this is the notify stream.
+
+    wave_send_mode   = 100,
+    wave_tx_at       = 101,
+
+    current_set      = 102,
+    current_get      = 103,
+
+    file_open        = 104,
+    file_close       = 105,
+    file_read        = 106,
+    file_write       = 107,
+    file_seek        = 108,
+    file_list        = 109,
+
+    shell_cmd        = 110,
+
+    bbspi_close      = 111,
+    bbspi_open       = 112,
+    bbspi_transfer   = 113,
+
+    slave_transfer   = 114,
+
+    events_bits_set  = 115,
+    trigger_event    = 116,
+
+    update_script    = 117,
+    wave_create_pad  = 118,
 };
 
 const PI_NTFY_FLAGS_EVENT = 1 << 7;
@@ -881,6 +921,18 @@ pub fn shell( self     : *PiGPIO,
 }
 
 // -----------------------------------------------------------------------------
+//  Public function: slave_transfer
+// -----------------------------------------------------------------------------
+/// Get the version number from the pigpiod daemon.
+
+// pub fn slave_transfer( self : *PiGPIO, in_trasfer : SlaveTransfer ) Error!void
+// {
+//     const param : *u8 = @ptrCast( &in_transfer );
+//     const ext = [_]Extent{ param[0..@sizeOf( SlaveTransfer )] };
+//     _ = try self.doCmd( .slave_transfer, true, 0, 0, &ext );
+// }
+
+// -----------------------------------------------------------------------------
 //  Public function: custom1
 // -----------------------------------------------------------------------------
 /// Run a custom function on the pigpiod dameon.
@@ -1131,6 +1183,10 @@ pub fn scriptStatus( self       : *PiGPIO,
     return result;
 }
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//  Sub-structure builders
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 // -----------------------------------------------------------------------------
 //  Public function: pin
 // -----------------------------------------------------------------------------
@@ -1157,11 +1213,31 @@ pub fn spi( self : *PiGPIO ) SPI
 }
 
 // -----------------------------------------------------------------------------
+//  Public function: bbSPI
+// -----------------------------------------------------------------------------
+/// Return a partially initialized BitBangSPI structure.
+
+pub fn bbSPI( self : *PiGPIO ) BitBangSPI
+{
+    return .{ .gpio = self };
+}
+
+// -----------------------------------------------------------------------------
 //  Public function: i2c
 // -----------------------------------------------------------------------------
 /// Return a partially initialized I2C structure.
 
 pub fn i2c( self : *PiGPIO ) I2C
+{
+    return .{ .gpio = self };
+}
+
+// -----------------------------------------------------------------------------
+//  Public function: bbI2C
+// -----------------------------------------------------------------------------
+/// Return a partially initialized BitBangI2C structure.
+
+pub fn bbI2C( self : *PiGPIO ) BitBangI2C
 {
     return .{ .gpio = self };
 }
@@ -1177,6 +1253,16 @@ pub fn serial( self : *PiGPIO ) Serial
 }
 
 // -----------------------------------------------------------------------------
+//  Public function: bbSerial
+// -----------------------------------------------------------------------------
+/// Return a partially initialized BitBangSerial structure.
+
+pub fn bbSerial( self : *PiGPIO ) BitBangSerial
+{
+    return .{ .gpio = self };
+}
+
+// -----------------------------------------------------------------------------
 //  Public function: file
 // -----------------------------------------------------------------------------
 /// Return a partially initialized File structure.
@@ -1186,9 +1272,9 @@ pub fn file( self : *PiGPIO ) File
     return .{ .gpio = self };
 }
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  Private Functions
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // -----------------------------------------------------------------------------
 //  Function: extentFrom
@@ -1404,7 +1490,7 @@ fn updateNotifyLevelBits( self : *PiGPIO ) !void
 
         // log.debug( "level_bits_set {X} {X}", .{ self.notify_handle, bits } );
 
-        _ = try self.doCmd( .level_bits_set, true, self.notify_handle, bits, null );
+        _ = try self.doCmd( .notify_begin, true, self.notify_handle, bits, null );
     }
 }
 
@@ -1778,9 +1864,9 @@ fn convertError( in_err : i32 ) PiGPIOError
     unreachable;
 }
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  GPIO Pin Control
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /// This structure manages a GPIO pin.
 
@@ -1963,7 +2049,7 @@ pub const Pin = struct
                                  &ext );
     }
 
-    // ==== PWM Functions ======================================================
+    // ~~~ PWM Functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     // -------------------------------------------------------------------------
     //  Public Function: Pin.setPWMFrequency
@@ -2075,7 +2161,7 @@ pub const Pin = struct
         return cycle / range;
     }
 
-    // ==== Servo Functions ====================================================
+    // ~~~ Servo Functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     // -------------------------------------------------------------------------
     //  Public Function: Pin.setServoPulseWidth
@@ -2104,7 +2190,7 @@ pub const Pin = struct
         return try self.gpio.doCmd( .servo_get, true, self.num, 0, null );
     }
 
-    // ==== Pin Callback Setup =================================================
+    // ~~~ Pin Callback Setup ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     // -------------------------------------------------------------------------
     // Public Function: Pin.addLevelCallback
@@ -2165,9 +2251,9 @@ pub const Pin = struct
 };
 
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  SPI Master Interface
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /// This stucture sets up a communication channel with hardware spi pins.
 
@@ -2175,33 +2261,6 @@ pub const SPI = struct
 {
     gpio      : *PiGPIO,
     id        : u32     = 0xFFFF_FFFF,
-
-    pub const Flags = packed struct
-    {
-        /// SPI mode select
-        mode         : u2       = 0,
-        /// Set true to make CS active high
-        cs0_invert   : bool     = false,
-        cs1_invert   : bool     = false,
-        cs2_invert   : bool     = false,
-        /// Set true to inhibit the chip select line
-        cs0_inhibit  : bool     = false,
-        cs1_inhibit  : bool     = false,
-        cs2_inhibit  : bool     = false,
-        /// Set true to select the SPI1 interface
-        aux          : bool     = false,
-        /// Select true for 3-wire operation (main interface only)
-        three_wire   : bool     = false,
-        /// Number of pad byte in 3-wire mode
-        pad          : u4       = 0,
-        /// Set true to transmit low order bit first (aux interface only)
-        tx_lsb       : bool     = false,
-        /// Set true to receive low order bif first (aux interface only)
-        rx_lsb       : bool     = false,
-        /// Set SPI word size
-        word_size    : u6       = 0,
-        unused       : u10      = 0,
-    };
 
     // -------------------------------------------------------------------------
     //  Public Function: SPI.open
@@ -2224,7 +2283,7 @@ pub const SPI = struct
     /// - Channel 1 CS: 9
     ///
     /// Raspberry Pi's with the 40-pin headder also support an auxillary SPI
-    /// interface (selected by setting the SPI.Flags aux bit true). It supports
+    /// interface (selected by setting the SPI_Flags aux bit true). It supports
     /// three channels and has the following pin assignments:
     /// - MSIO: 19
     /// - MSOI: 20
@@ -2234,7 +2293,7 @@ pub const SPI = struct
     /// - Channel 2 CS: 16
     ///
     /// For either interface, chip select signal can be inhibited by setting
-    /// the apporpriate Flags.cs_inhibit value to true.  In such a case the
+    /// the apporpriate SPI_Flags.cs_inhibit value to true.  In such a case the
     /// channel nuber is ignored and the calling program must control the
     /// chip select itself.
     ///
@@ -2246,7 +2305,7 @@ pub const SPI = struct
     pub fn open( self         : *SPI,
                  in_channel   : u2,
                  in_bit_rate  : u32,
-                 in_flags     : Flags ) Error!void
+                 in_flags     : SPI_Flags ) Error!void
     {
         self.close(); // will do nothing if SPI not already open.
 
@@ -2332,7 +2391,11 @@ pub const SPI = struct
 
         const ext = [_]Extent{ in_tx_slice };
 
-        _ = try self.gpio.doCmd( .spi_trasfer, false, self.id, 0, &ext );
+        _ = try self.gpio.doCmd( .spi_trasfer,
+                                 false,
+                                 self.id,
+                                 @intCast( out_rx_slice.len ),
+                                 &ext );
 
         defer self.gpio.cmd_mutex.unlock();
 
@@ -2340,9 +2403,99 @@ pub const SPI = struct
     }
 };
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//  BitBangSPI Master Interface
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+/// This stucture sets up an SPI communication channel in software.  It can
+/// use any GPIO pins but is less efficiaent than the hardware version.
+
+pub const BitBangSPI = struct
+{
+    gpio      : *PiGPIO,
+    id        : u32     = 0xFFFF_FFFF,
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSPI.open
+    // -------------------------------------------------------------------------
+
+    pub fn open( self         : *SPI,
+                 in_cs        : Pin,
+                 in_miso      : Pin,
+                 in_mosi      : Pin,
+                 in_sclk      : Pin,
+                 in_bit_rate  : u32,
+                 in_flags     : SPI_Flags ) Error!void
+    {
+        std.debug.assert( in_cs.gpio   == self.gpio );
+        std.debug.assert( in_miso.gpio == self.gpio );
+        std.debug.assert( in_mosi.gpio == self.gpio );
+        std.debug.assert( in_sclk.gpio == self.gpio );
+
+        self.close(); // will do nothing if SPI not already open.
+
+        const buf : [5]u32 = .{ in_mosi.num,
+                                in_miso.num,
+                                in_sclk.num,
+                                in_bit_rate,
+                                @as( *u32, @ptrCast( &in_flags ) ).* };
+
+        const b : *u8 = @ptrCast( &buf );
+        const ext = [_]Extent{ b[0..5*4] };
+
+        self.id  = try self.gpio.doCmd( .bbspi_open,
+                                        true,
+                                        in_cs.num,
+                                        0,
+                                        &ext );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSPI.close
+    // -------------------------------------------------------------------------
+    /// Close an open SPI channel.
+
+    pub fn close( self : *SPI ) void
+    {
+        _ = self.gpio.doCmd( .bbspi_close, true, self.id, 0, null ) catch {};
+
+        self.id = 0xFFFF_FFFF;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangSPI.transfer
+    // -------------------------------------------------------------------------
+    /// This function sends the slice transmit slice and simultaniously reads
+    /// to the receive buffer.
+    ///
+    /// The caller must assure that receive slice is the same size as
+    /// the transmit slice.  It is permissable for the receive slice to point
+    /// to the same memory as the transmit slice.
+
+    pub fn transfer( self          : SPI,
+                     in_tx_slice   : [] const u8,
+                     out_rx_slice  : []u8 ) Error!void
+    {
+        std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
+        std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
+
+        const ext = [_]Extent{ in_tx_slice };
+
+        _ = try self.gpio.doCmd( .bbspi_trasfer,
+                                 false,
+                                 self.id,
+                                 @intCast( out_rx_slice.len ),
+                                 &ext );
+
+        defer self.gpio.cmd_mutex.unlock();
+
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
+    }
+};
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  I2C Master Interface
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pub const I2C = struct
 {
@@ -2371,6 +2524,7 @@ pub const I2C = struct
     {
         self.close(); // will do nothing if I2C not already open.
 
+        // There are no i2c flags defined so we just pass zero.
         const zero : u32 = 0;
         const ext = [_]Extent{ extentFrom( u32, &zero ) };
 
@@ -2700,9 +2854,83 @@ pub const I2C = struct
     }
 };
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//  BitBangI2C Master Interface
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+/// This stucture sets up an SPI communication channel in software.  It can
+/// use any GPIO pins but is less efficiaent than the hardware version.
+
+pub const BitBangI2C = struct
+{
+    gpio      : *PiGPIO,
+    id        : u32     = 0xFFFF_FFFF,
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangI2C.open
+    // -------------------------------------------------------------------------
+
+    pub fn open( self         : *SPI,
+                 in_sda       : Pin,
+                 in_scl       : Pin,
+                 in_bit_rate  : u32 ) Error!void
+    {
+        std.debug.assert( in_sda.gpio == self.gpio );
+        std.debug.assert( in_scl.gpio == self.gpio );
+
+        self.close(); // will do nothing if SPI not already open.
+
+        const ext = [_]Extent{ extentFrom( u32, &in_bit_rate ) };
+
+        self.id  = try self.gpio.doCmd( .bbi2c_open,
+                                        true,
+                                        in_sda.num,
+                                        in_scl.num,
+                                        &ext );
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangI2C.close
+    // -------------------------------------------------------------------------
+    /// Close an open SPI channel.
+
+    pub fn close( self : *SPI ) void
+    {
+        _ = self.gpio.doCmd( .bbi2c_close, true, self.id, 0, null ) catch {};
+
+        self.id = 0xFFFF_FFFF;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: BitBangI2C.transfer
+    // -------------------------------------------------------------------------
+    /// This function sends the slice transmit slice and then reads
+    /// to the receive buffer.
+
+    pub fn transfer( self          : SPI,
+                     in_tx_slice   : [] const u8,
+                     out_rx_slice  : []u8 ) Error!void
+    {
+        std.debug.assert( out_rx_slice.len <= 0xFFFF_FFFF );
+        std.debug.assert( in_tx_slice.len ==  out_rx_slice.len );
+
+        const ext = [_]Extent{ in_tx_slice };
+
+        _ = try self.gpio.doCmd( .bbi2c_trasfer,
+                                 false,
+                                 self.id,
+                                 out_rx_slice.len,
+                                 &ext );
+
+        defer self.gpio.cmd_mutex.unlock();
+
+        _ = try self.gpio.cmd_stream.read( out_rx_slice );
+    }
+};
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  Serial Interface
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pub const Serial = struct
 {
@@ -2846,9 +3074,9 @@ pub const Serial = struct
     }
 };
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  BitBangSerial Interface
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pub const BitBangSerial = struct
 {
@@ -2934,9 +3162,9 @@ pub const BitBangSerial = struct
     }
 };
 
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  File Interface
-// =============================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pub const File = struct
 {
@@ -3071,7 +3299,8 @@ pub const File = struct
 //  GPIO  6 - Connect an LED
 
 
-const testing = std.testing;
+const testing   = std.testing;
+const test_host = "pigp30.wifi";
 
 test "Connection"
 {
@@ -3086,12 +3315,12 @@ test "Connection"
 
     try testing.expectError( error.ConnectionRefused,
                              gpio.connect( testing.allocator,
-                                           "localhost",
+                                           test_host,
                                            31416 ) );
 
     // --- check for connect (and ipv6 address parsing) ---
 
-    try gpio.connect( testing.allocator, "::", 8888 );
+    try gpio.connect( testing.allocator, test_host, 8888 );
     defer gpio.disconnect();
 
     try testing.expectEqual( 0x7F00, try gpio.shell( "foo", "bar" ) );
@@ -3107,7 +3336,7 @@ test "Block Transfer"
 {
     var gpio : PiGPIO = .{};
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     _ = try gpio.readBank1();
@@ -3134,7 +3363,7 @@ test "custom command"
 
     var gpio : PiGPIO = .{};
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try testing.expect( try gpio.custom1( 1, 2, "three" ) == 116 );
@@ -3153,7 +3382,7 @@ test "basic pin test"
 //   const pwm_pin       = gpio.pin(  6 );
 //   const servi_pin     = gpio.pin(  6 );
 
-  try gpio.connect( testing.allocator, null, null );
+  try gpio.connect( testing.allocator, test_host, null );
   defer gpio.disconnect();
 
   try digital_pin.setMode( .input );
@@ -3182,7 +3411,7 @@ test "SPI"
     var gpio : PiGPIO  = .{};
     var test_spi       = gpio.spi();
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try test_spi.open( 0, 6_000_000, .{} );
@@ -3202,7 +3431,7 @@ test "I2C"
     var gpio : PiGPIO   = .{};
     var test_i2c        = gpio.i2c();
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try test_i2c.open( 0, 0x42 );
@@ -3243,7 +3472,7 @@ test "Serial Functions"
     var test_ser          = gpio.serial();
     // var buffer : [15]u8        = undefined;
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try test_ser.open( "/dev/ttyUSB0", 9600, 0 );
@@ -3277,7 +3506,7 @@ test "File Functions"
     var test_file            = gpio.file();
     var buffer    : [64]u8   = undefined;
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try test_file.open( "test.file", File.READ );
@@ -3318,7 +3547,7 @@ test "Level Callback"
     var result : PiGPIO.Edge   = .either;
     var test_pin               = gpio.pin( 6 );
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try test_pin.addLevelCallback( .rising, testLevelCB, @ptrCast( &result ) );
@@ -3362,7 +3591,7 @@ test "Event Callback"
     var gpio : PiGPIO = .{};
     var result : u32 = 0;
 
-    try gpio.connect( testing.allocator, null, null );
+    try gpio.connect( testing.allocator, test_host, null );
     defer gpio.disconnect();
 
     try gpio.addEventCallback( 13, testEventCB, @ptrCast( &result ) );

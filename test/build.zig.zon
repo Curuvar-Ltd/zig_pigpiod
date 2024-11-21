@@ -38,7 +38,7 @@
         //    // computed. This field and `url` are mutually exclusive.
         //    .path = "foo",
         //},
-        .pigpio =
+        .zpigpio =
           .{
             .path = ".."
           },

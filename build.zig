@@ -18,7 +18,7 @@ pub fn build( b: * std.Build ) void
 
     _ = b.addModule( "ZPIGPIO",
                      .{
-                         .root_source_file = .{ .path = "src/pigpio.zig" },
+                         .root_source_file = b.path( "src/pigpio.zig" ),
                          .target           = target,
                          .optimize         = optimize,
                        } );
@@ -34,7 +34,7 @@ pub fn build( b: * std.Build ) void
 
     const lib_unit_tests = b.addTest(
         .{
-            .root_source_file = .{ .path = "src/pigpio.zig" },
+            .root_source_file = b.path( "src/pigpio.zig" ),
             .target           = target,
             .optimize         = optimize,
         } );
