@@ -2256,7 +2256,7 @@ pub const Pin = struct
 
     pub fn equ( self : Pin, in_pin : Pin ) bool
     {
-        return self.num == in_pin.num  &&  self.gpio == in_pin.gpio;
+        return self.num == in_pin.num  and  self.gpio == in_pin.gpio;
     }
 };
 
