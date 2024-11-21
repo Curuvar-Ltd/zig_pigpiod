@@ -2216,7 +2216,7 @@ pub const Pin = struct
                                         in_context );
     }
 
-   // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Public Function: Pin.remove callback
     // -------------------------------------------------------------------------
     /// Set a callback function that will be called if the pin's state
@@ -2247,6 +2247,16 @@ pub const Pin = struct
                                     self.num,
                                     in_timeout,
                                     null ) != 0;
+    }
+
+    // -------------------------------------------------------------------------
+    //  Public Function: Pin.equ
+    // -------------------------------------------------------------------------
+    ///  Test two pins for equality
+
+    pub fn equ( self : Pin, in_pin : Pin ) bool
+    {
+        return self.num == in_pin.num  &&  self.gpio == in_pin.gpio;
     }
 };
 
