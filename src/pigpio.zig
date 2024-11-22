@@ -1581,6 +1581,8 @@ fn notifyThread( self : *PiGPIO ) void
 
     self.notify_handle = hdr.p3;
 
+    self.list_mutex.lock();
+
     self.updateNotifyLevelBits() catch |err|
     {
         log.err( "updateNotifyLevelBits error {}", .{ err } );
@@ -1591,8 +1593,10 @@ fn notifyThread( self : *PiGPIO ) void
         log.err( "updateNotifyEventBits error {}", .{ err } );
     };
 
+    self.list_mutex.unlock();
+
     runloop: while(   self.level_cb_first != null
-                  or self.event_cb_first != null)
+                   or self.event_cb_first != null)
     {
         var pollfd = [_]std.posix.pollfd{ .{ .fd     = notify_stream.handle,
                                             .events  = std.posix.POLL.IN,
