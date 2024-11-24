@@ -87,6 +87,9 @@ level_cb_first : ?*LevelCallback = null,
 /// Event notification callbacks.
 event_cb_first : ?*EventCallback = null,
 
+/// Whether the notify thread is running
+notifyThreadActive : bool = false,
+
 // =============================================================================
 //  Public Constants
 // =============================================================================
@@ -1006,15 +1009,15 @@ pub fn addEventCallback( self       : *PiGPIO,
     const cb = try self.allocator.create( EventCallback );
     errdefer self.allocator.destroy( cb );
 
+    self.list_mutex.lock();
+    defer self.list_mutex.unlock();
+
     cb.* = .{
                 .next    = self.event_cb_first,
                 .event   = in_event,
                 .func    = in_func,
                 .context = in_context
             };
-
-    self.list_mutex.lock();
-    defer self.list_mutex.unlock();
 
     const start_notify =    self.level_cb_first  == null
                         and self.event_cb_first  == null;
@@ -1024,11 +1027,11 @@ pub fn addEventCallback( self       : *PiGPIO,
     if (start_notify)
     {
         self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+
+        while (!self.notifyThreadActive) try std.Thread.yield();
     }
-    else
-    {
-        try self.updateNotifyEventBits();
-    }
+
+    try self.updateNotifyEventBits();
 }
 
 // -----------------------------------------------------------------------------
@@ -1382,8 +1385,19 @@ fn addLevelCallback( self       : *PiGPIO,
                      in_func    : LevelCBFunc,
                      in_context : ?*anyopaque ) !void
 {
+    log.debug( "Started addLevelCallback ({})", .{in_pin} );
+    defer log.debug( "Finished addLevelCallback", .{} );
+
+    // We cannot set a callback on the .timeout value.  Use the
+    // watchdog command instead.
+
+    std.debug.assert( in_edge != .timeout );
+
     const cb = try self.allocator.create( LevelCallback );
     errdefer self.allocator.destroy( cb );
+
+    self.list_mutex.lock();
+    defer self.list_mutex.unlock();
 
     cb.* = .{
                 .next    = self.level_cb_first,
@@ -1393,9 +1407,6 @@ fn addLevelCallback( self       : *PiGPIO,
                 .context = in_context
             };
 
-    self.list_mutex.lock();
-    defer self.list_mutex.unlock();
-
     const start_notify =    self.level_cb_first  == null
                         and self.event_cb_first  == null;
 
@@ -1403,12 +1414,14 @@ fn addLevelCallback( self       : *PiGPIO,
 
     if (start_notify)
     {
-      self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+//        log.debug( "start notify thread", .{} );
+        std.debug.print( "start notify thread\n", .{} );
+        self.notify_thread = try std.Thread.spawn( .{}, notifyThread, .{ self } );
+
+        while (!self.notifyThreadActive) try std.Thread.yield();
     }
-    else
-    {
-        try self.updateNotifyLevelBits();
-    }
+
+    try self.updateNotifyLevelBits();
 }
 
 // -----------------------------------------------------------------------------
@@ -1470,25 +1483,38 @@ fn removeLevelCallback( self       : *PiGPIO,
 
 fn updateNotifyLevelBits( self : *PiGPIO ) !void
 {
+    // log.debug( "Started updateNotifyLevelBits", .{} );
+    // defer log.debug( "Finished updateNotifyLevelBits", .{} );
+
     // Note to self: don't lock the mutex, we should be
     // running under one already.
 
     var a_callback = self.level_cb_first;
 
+    var cpu : usize = 0;
+    _ = std.os.linux.getcpu( &cpu, null );
+
+//    log.debug( "update: first: {*}   cpu: {}", .{ a_callback, cpu } );
+    std.debug.print( "update: first: {*}   cpu: {}\n", .{ a_callback, cpu } );
+
     var bits : u32 = 0;
 
     while (a_callback) |cb|
     {
+//        log.debug( "     cb: {*}   pin:{}   next: {*}", .{ cb, a_pin, a_callback } );
+        std.debug.print( "     cb: {*}   pin:{}   next: {*}\n", .{ cb, cb.pin, cb.next } );
+
         bits |= @as( u32, 1 ) << cb.pin;
 
         a_callback = cb.next;
     }
 
+//    log.debug( "update: done", .{} );
+    std.debug.print( "update: done\n", .{} );
+
     if (bits != self.notify_level_bits)
     {
         self.notify_level_bits = bits;
-
-        // log.debug( "level_bits_set {X} {X}", .{ self.notify_handle, bits } );
 
         _ = try self.doCmd( .notify_begin, true, self.notify_handle, bits, null );
     }
@@ -1552,6 +1578,9 @@ fn notifyThread( self : *PiGPIO ) void
 
     defer notify_stream.close();
 
+    self.notifyThreadActive = true;
+    defer  self.notifyThreadActive = false;
+
     var   hdr : Header = .{ .cmd = @intFromEnum( Command.begin_notify ),
                             .p1  = 0,
                             .p2  = 0,
@@ -1581,20 +1610,6 @@ fn notifyThread( self : *PiGPIO ) void
 
     self.notify_handle = hdr.p3;
 
-    self.list_mutex.lock();
-
-    self.updateNotifyLevelBits() catch |err|
-    {
-        log.err( "updateNotifyLevelBits error {}", .{ err } );
-    };
-
-    self.updateNotifyEventBits() catch |err|
-    {
-        log.err( "updateNotifyEventBits error {}", .{ err } );
-    };
-
-    self.list_mutex.unlock();
-
     runloop: while(   self.level_cb_first != null
                    or self.event_cb_first != null)
     {
@@ -1610,7 +1625,6 @@ fn notifyThread( self : *PiGPIO ) void
         };
 
         if (poll_result <= 0) continue :runloop;
-
 
         const status = notify_stream.read( buf[0..12] ) catch |err|
         {
@@ -2022,7 +2036,7 @@ pub const Pin = struct
     /// reported via callback, callbackEX or waitForEdge.
     ///
     /// Parameter:
-    /// - in_steady - the number of microseconds the pin must be stable
+    /// - in_steady - the number of microseconds (µS) the pin must be stable
 
     pub fn setGlitchFilter(  self : Pin, in_steady : u32 ) Error!void
     {
@@ -2208,11 +2222,6 @@ pub const Pin = struct
                              in_context : ?*anyopaque )!void
     {
         if (self.num > 31) return error.bad_user_gpio;
-
-        // We cannot set a callback on the .timeout value.  Use the
-        // watchdog command instead.
-
-        std.debug.assert( in_edge != .timeout );
 
         try self.gpio.addLevelCallback( @intCast( self.num ),
                                         in_edge,
