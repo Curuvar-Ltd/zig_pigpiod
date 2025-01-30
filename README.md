@@ -1,14 +1,12 @@
-# ZPIGPIO
+# zig_pigpiod
 
-ZPIGPIO is a Zig module that communicates with the Raspberry Pi's pigpiod
+Zig_pigpiod is a Zig module that communicates with the Raspberry Pi's pigpiod
 GPIO daemon.
 
-~~PIGPIO-Zig provides most of the capabilities of C based pigpiod_if2
+Zig_pigpiod provides most of the capabilities of C based pigpiod_if2
 interface, but is written entirely in zig.  The missing capabilities are
 functions that pigpiod implements directly on the client, and that Zig
-provides native function for.~~
-
-The above paragraph represents the goal, not the reality.
+provides native function for.
 
 Currently working:
 
@@ -43,7 +41,7 @@ choosing a different style, just don't push it on me.
 
 If you with to use this code in your own project, the license allows you to
 reformat it and you may do so with my blessing.  I have no desire to force
-my style on you; however, if you wish to contribute to this project, please
+my style on you.  However, if you wish to contribute to this project, please
 respect the style that I have chosen:
 
 - Allman style braces.

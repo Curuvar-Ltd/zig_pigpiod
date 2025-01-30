@@ -1,5 +1,4 @@
 // zig fmt: off
-// DO NOT REMOVE ABOVE LINE -- I strongly dislike the way Zig formats code.
 
 // -----------------------------------------------------------------------------
 // Copyright © 2024, Curuvar Ltd.
@@ -33,10 +32,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 // -----------------------------------------------------------------------------
 
-//! PiGPIO-Zig is a module that communicates with the Raspberry Pi's pigpiod
+//! Zig_pigpiod is a module that communicates with the Raspberry Pi's pigpiod
 //! GPIO daemon.
 //!
-//! PiGPIO-Zig provides most of the capabilities of C based pigpiod_if2
+//! Zig_pigpiod provides most of the capabilities of C based pigpiod_if2
 //! interface, but is written entirely in zig.  The missing capabilities are
 //! functions that pigpiod implements directly on the client, and that Zig
 //! provides native function for.
@@ -651,7 +650,7 @@ pub fn disconnect( self : *PiGPIO ) void
 // -----------------------------------------------------------------------------
 //  Public function: readBank1
 // -----------------------------------------------------------------------------
-/// Read all bank 1 GPIO pins (0-31) simultaniouslly.
+/// Read all bank 1 GPIO pins (0-31) simultaneously.
 ///
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
@@ -664,7 +663,7 @@ pub fn readBank1( self : *PiGPIO ) Error!u32
 // -----------------------------------------------------------------------------
 //  Public function: readBank2
 // -----------------------------------------------------------------------------
-/// Read all bank 2 GPIO pins (32-53) simultaniouslly.
+/// Read all bank 2 GPIO pins (32-53) simultaneously.
 ///
 /// The result is a u32 with the state of all GPIO pins.  The low order bit
 /// is pin 1.
@@ -677,7 +676,7 @@ pub fn readBank2( self : *PiGPIO )  Error!u32
 // -----------------------------------------------------------------------------
 //  Public function: clearBank1
 // -----------------------------------------------------------------------------
-/// Clear multiple bank 1 GPIO pins (0-31) simultaniouslly.
+/// Clear multiple bank 1 GPIO pins (0-31) simultaneously.
 ///
 /// Parameter:
 /// - in_pins - I mask indicating the pins to clear. The low order bit is pin 1.
@@ -690,7 +689,7 @@ pub fn clearBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 // -----------------------------------------------------------------------------
 //  Public function: clearBank2
 // -----------------------------------------------------------------------------
-/// Clear multiple bank 2 GPIO pins (32-53) simultaniouslly.
+/// Clear multiple bank 2 GPIO pins (32-53) simultaneously.
 ///
 /// Parameter:
 /// - in_pins - I mask indicating the pins to clear. The low order bit is pin 32.
@@ -703,7 +702,7 @@ pub fn clearBank2(  self : *PiGPIO, in_pins : u32 ) Error!void
 // -----------------------------------------------------------------------------
 //  Public function: setBank1
 // -----------------------------------------------------------------------------
-/// Set multiple bank 1 GPIO pins (0-31) simultaniouslly.
+/// Set multiple bank 1 GPIO pins (0-31) simultaneously.
 ///
 /// Parameter:
 /// - in_pins - I mask indicating the pins to set. The low order bit is pin 1.
@@ -716,7 +715,7 @@ pub fn setBank1(  self : *PiGPIO, in_pins : u32 ) Error!void
 // -----------------------------------------------------------------------------
 //  Public function: setBank2
 // -----------------------------------------------------------------------------
-/// Set multiple bank 2 GPIO pins (32-53) simultaniouslly.
+/// Set multiple bank 2 GPIO pins (32-53) simultaneously.
 ///
 /// Parameter:
 /// - in_pins - I mask indicating the pins to set. The low order bit is pin 32.
@@ -729,7 +728,7 @@ pub fn setBank2( self : *PiGPIO, in_pins : u32 ) Error!void
 // -----------------------------------------------------------------------------
 //  Public function: maskedUpdateBank1
 // -----------------------------------------------------------------------------
-/// Update a subset of bank 1 GPIO pins (0-31) simultaniouslly.
+/// Update a subset of bank 1 GPIO pins (0-31) simultaneously.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
@@ -749,7 +748,7 @@ pub fn maskedUpdateBank1( self      : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedUpdateBank2
 // -----------------------------------------------------------------------------
-/// Update a subset of bank 1 GPIO pins (32-53) simultaniouslly.
+/// Update a subset of bank 1 GPIO pins (32-53) simultaneously.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
@@ -769,7 +768,7 @@ pub fn maskedUpdateBank2( self      : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedSetModeBank1
 // -----------------------------------------------------------------------------
-/// Set the mode a subset of bank 1 GPIO pins (0-31) simultaniouslly.
+/// Set the mode a subset of bank 1 GPIO pins (0-31) simultaneously.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
@@ -796,7 +795,7 @@ pub fn maskedSetModeBank1( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedSetModeBank2
 // -----------------------------------------------------------------------------
-/// Set the mode a subset of bank 1 GPIO pins (32-53) simultaniouslly.
+/// Set the mode a subset of bank 1 GPIO pins (32-53) simultaneously.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
@@ -823,7 +822,7 @@ pub fn maskedSetModeBank2( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedSetPullBank1
 // -----------------------------------------------------------------------------
-/// Set the mode a subset of bank 1 GPIO pins simultaniouslly.
+/// Set the mode a subset of bank 1 GPIO pins simultaneously.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
@@ -850,7 +849,7 @@ pub fn maskedSetPullBank1( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: maskedSetPullBank2
 // -----------------------------------------------------------------------------
-/// Set the mode a subset of bank 1 GPIO pins (32-53) simultaniouslly.
+/// Set the mode a subset of bank 1 GPIO pins (32-53) simultaneously.
 ///
 /// Parameter:
 /// - in_values - The value to set the pins to
@@ -877,7 +876,7 @@ pub fn maskedSetPullBank2( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: getCurrentTick
 // -----------------------------------------------------------------------------
-/// Get the current tick (microseconds) from the pgpiod daemon.
+/// Get the current tick (microseconds) from the pigpiod daemon.
 
 pub fn getCurrentTick( self : *PiGPIO ) Error!u32
 {
@@ -887,7 +886,7 @@ pub fn getCurrentTick( self : *PiGPIO ) Error!u32
 // -----------------------------------------------------------------------------
 //  Public function: getHardwareVersion
 // -----------------------------------------------------------------------------
-/// Get the hardware version from the pgpiod daemon.
+/// Get the hardware version from the pigpiod daemon.
 
 pub fn getHardwareVersion( self : *PiGPIO ) Error!u32
 {
@@ -928,7 +927,7 @@ pub fn shell( self     : *PiGPIO,
 // -----------------------------------------------------------------------------
 /// Get the version number from the pigpiod daemon.
 
-// pub fn slave_transfer( self : *PiGPIO, in_trasfer : SlaveTransfer ) Error!void
+// pub fn slave_transfer( self : *PiGPIO, in_transfer : SlaveTransfer ) Error!void
 // {
 //     const param : *u8 = @ptrCast( &in_transfer );
 //     const ext = [_]Extent{ param[0..@sizeOf( SlaveTransfer )] };
@@ -938,7 +937,7 @@ pub fn shell( self     : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: custom1
 // -----------------------------------------------------------------------------
-/// Run a custom function on the pigpiod dameon.
+/// Run a custom function on the pigpiod daemon.
 /// The daemon needs to be re-built to add the custom function.
 ///
 /// The meaning of the three arguments depend on custom function itself.
@@ -966,7 +965,7 @@ pub fn custom1( self    : *PiGPIO,
 // -----------------------------------------------------------------------------
 //  Public function: custom2
 // -----------------------------------------------------------------------------
-/// Run a custom function on the pigpiod dameon.
+/// Run a custom function on the pigpiod daemon.
 /// The daemon needs to be re-built to add the custom function.
 ///
 /// The meaning of the two arguments depend on custom function itself.

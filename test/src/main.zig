@@ -1,6 +1,6 @@
 
 const std          = @import( "std" );
-const GPIO         = @import( "ZPIGPIO" );
+const GPIO         = @import( "zig_pigpio" );
 
 var   gpa          = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator    = gpa.allocator();

@@ -1,5 +1,10 @@
 {
   "cSpell.words": [
+    "anyopaque",
+    "errdefer",
+    "getcpu",
+    "pgpiod",
+    "pigpio",
     "pigpiod"
   ]
 }

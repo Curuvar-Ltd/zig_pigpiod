@@ -1,5 +1,4 @@
 // zig fmt: off
-// DO NOT REMOVE ABOVE LINE -- zig's auto-formatting sucks.
 
 // =============================================================================
 //  Build the Curuvar PiGPIO Library
@@ -16,7 +15,7 @@ pub fn build( b: * std.Build ) void
     //  Create the pigpio module
     // =========================================================================
 
-    _ = b.addModule( "ZPIGPIO",
+    _ = b.addModule( "zig-pigpio",
                      .{
                          .root_source_file = b.path( "src/pigpio.zig" ),
                          .target           = target,
