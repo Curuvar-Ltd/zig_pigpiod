@@ -2,7 +2,7 @@
 // DO NOT REMOVE ABOVE LINE -- I strongly dislike the way Zig formats code.
 
 // =============================================================================
-//  Build the PiGP-30 Emulator
+//  Build the zig-pigpio test app
 // =============================================================================
 
 const std = @import( "std" );
@@ -18,22 +18,22 @@ pub fn build( b: * std.Build ) void
 
 
   // ========================================================================
-  //  Build the Executable PiGP-30
+  //  Build the Executable zig-pigpio test app
   // ========================================================================
 
   const exe = b.addExecutable(
     .{
-      .name             = "pigpio-test",
-      .root_source_file = .{ .path = "src/main.zig" },
-      .target           = target,
-      .optimize         = optimize,
+      .name             = "zig-pigpio-test",
+      .root_source_file  = .{ .path = "src/main.zig" },
+      .target       = target,
+      .optimize       = optimize,
   });
 
-  // Add "zpigpio" (from build.zig.zon) as an importable dependency.
+  // Add "zig-pigpio" (from build.zig.zon) as an importable dependency.
 
-  const zpigpio =  b.dependency( "zpigpio", .{} ).module( "ZPIGPIO" );
+  const zig_pigpio =  b.dependency( "zig_pigpio", .{} ).module( "zig_pigpio" );
 
-  exe.root_module.addImport( "ZPIGPIO", zpigpio );
+  exe.root_module.addImport( "zig_pigpio", zig_pigpio );
 
   // Indicate that his application should be installed in the final
   // installation directory.

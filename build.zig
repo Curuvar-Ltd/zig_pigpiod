@@ -1,7 +1,7 @@
 // zig fmt: off
 
 // =============================================================================
-//  Build the Curuvar PiGPIO Library
+//  Build the Curuvar zig_pigpiod Library
 // =============================================================================
 
 const std = @import( "std" );
@@ -12,10 +12,10 @@ pub fn build( b: * std.Build ) void
     const optimize = b.standardOptimizeOption( .{} );
 
     // =========================================================================
-    //  Create the pigpio module
+    //  Create the zig_pigpio module
     // =========================================================================
 
-    _ = b.addModule( "zig-pigpio",
+    _ = b.addModule( "zig_pigpio",
                      .{
                          .root_source_file = b.path( "src/pigpio.zig" ),
                          .target           = target,
