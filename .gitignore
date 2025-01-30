@@ -1,7 +1,7 @@
 .DS_Store
 .vscode/sftp.json
 .*.icloud
-**/zig-cache
+**/.zig-cache
 **/zig-out
 **/._*
 
