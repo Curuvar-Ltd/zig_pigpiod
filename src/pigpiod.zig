@@ -462,8 +462,6 @@ const Command = enum(u8)
     wave_create      =  49,
     wave_send_once   =  51,
 
-
-
     wave_send_repeat =  52,
     wave_add_new     =  53,
 
