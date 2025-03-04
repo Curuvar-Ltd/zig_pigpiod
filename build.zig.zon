@@ -2,7 +2,7 @@
 // DO NOT REMOVE ABOVE LINE -- I strongly dislike the way Zig formats code.
 
 .{
-    .name                = "zig_pigpiod",
+    .name                = .pigpiod,
     .version             = "0.3.3",
     .minimum_zig_version = "0.13.0",
     .dependencies        = .{},
