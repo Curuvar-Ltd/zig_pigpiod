@@ -6,6 +6,7 @@
     .version             = "0.3.3",
     .minimum_zig_version = "0.13.0",
     .dependencies        = .{},
+    .fingerprint         = 0xf16e788030cb1e19,
     .paths =
     .{
         "build.zig",
